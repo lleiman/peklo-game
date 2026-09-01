@@ -80,18 +80,30 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
   text-transform:uppercase;color:var(--faint);text-align:center;
   max-width:52ch;margin:14px auto 0}
 
-/* ── Шаман: слух вместо зала ── */
-.listen{flex:1;display:flex;flex-direction:column;justify-content:center;
-  position:relative;min-height:180px}
-#wave{width:100%;height:190px;display:block}
-.listen .hint{font-family:var(--mono);font-size:9px;letter-spacing:.24em;
-  text-transform:uppercase;color:var(--faint);text-align:center;margin-top:10px}
+/* ── Шаман ──
+   Зал виден: библия описывает, как он чувствует одну среди сотен.
+   Но это отклики, а не фигурки, и кликать по ним нельзя */
+.listen{flex:1;position:relative;min-height:210px}
+#hall{position:absolute;inset:0;width:100%;height:100%;display:block}
+.modes{position:absolute;left:0;bottom:0;display:flex;align-items:center;gap:10px}
+.modes .ml{font-family:var(--mono);font-size:9px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--faint)}
+.modes .m{font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint);
+  border-bottom:1px solid transparent;padding-bottom:2px;transition:color .25s}
+.modes .m:hover{color:var(--dim)}
+.modes .m.on{color:var(--ember-hi);border-bottom-color:#43301f}
+
+/* осциллограмма и спектр — настоящие, читаются с выхода */
+#scope{width:100%;height:64px;display:block;margin:6px 0 14px;
+  border-bottom:1px solid var(--line)}
 
 .tubes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
   max-width:560px;margin:0 auto;width:100%}
-/* Трубка Организма: столб, наливающийся снизу. Уровень идёт
-   переменной --v, её двигает игровой цикл */
-.tube{position:relative;height:clamp(150px,26svh,230px);
+/* Трубка Организма: столб наливается снизу по --v (сколько держат),
+   а обводка светится по --lv — реальному уровню этого слоя в звуке.
+   Так видно, что нажатие делает музыку, а не просто двигает полоску */
+.tube{position:relative;height:clamp(140px,24svh,210px);
   border:1px solid var(--line);overflow:hidden;
   display:flex;flex-direction:column;justify-content:flex-end;
   align-items:center;padding-bottom:12px;
@@ -100,11 +112,19 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
   height:calc(var(--v,0) * 100%);
   background:linear-gradient(to top,rgba(255,106,31,.55),rgba(255,106,31,.12));
   transition:height .1s linear}
+.tube b{position:absolute;inset:0;pointer-events:none;
+  box-shadow:0 0 calc(var(--lv,0) * 34px) rgba(255,106,31,calc(var(--lv,0) * .85)) inset;
+  border:1px solid rgba(255,106,31,calc(var(--lv,0) * .7))}
 .tube.push{border-color:var(--ember-hi)}
 .tube .tl{position:relative;font-family:var(--mono);font-size:10px;
   letter-spacing:.2em;text-transform:uppercase;color:var(--ink-hi)}
 .tube .tk{position:relative;font-family:var(--mono);font-size:8.5px;
   letter-spacing:.2em;color:var(--faint);margin-top:4px}
+
+/* первые девять секунд подсказываем, что трубку надо держать */
+.teach .tube:first-child{animation:teach 1.6s ease-in-out infinite}
+@keyframes teach{0%,100%{border-color:var(--line)}50%{border-color:#7a4a22}}
+.teach .tip{color:var(--ember)}
 
 /* ── Танцующий: пол ── */
 .floor{flex:1;position:relative;min-height:300px;touch-action:manipulation}
@@ -114,6 +134,9 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
   text-transform:uppercase;color:var(--ink-hi);opacity:0}
 .phase.go{animation:phase 2.6s ease forwards}
 @keyframes phase{0%{opacity:0}14%{opacity:1}70%{opacity:1}100%{opacity:0}}
+.combo{position:absolute;left:0;right:0;bottom:12px;text-align:center;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--faint)}
 
 /* ── финал ── */
 #end .body{font-size:17px;line-height:1.8;color:var(--ink);margin-bottom:36px}

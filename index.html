@@ -49,16 +49,23 @@
   </header>
 
   <div class="listen">
-    <canvas id="wave"></canvas>
-    <div class="hint">то, что слышно из зала</div>
+    <canvas id="hall"></canvas>
+    <div class="modes">
+      <span class="ml">зал</span>
+      <button class="m on" data-mode="near">ближайший</button>
+      <button class="m" data-mode="all">весь</button>
+      <button class="m" data-mode="dim">смутно</button>
+    </div>
   </div>
 
+  <canvas id="scope"></canvas>
+
   <div class="tubes">
-    <button id="tube-drone" class="tube"><i></i><span class="tl">дрон</span><span class="tk">1</span></button>
-    <button id="tube-drum"  class="tube"><i></i><span class="tl">дарбука</span><span class="tk">2</span></button>
-    <button id="tube-choir" class="tube"><i></i><span class="tl">хор</span><span class="tk">3</span></button>
+    <button id="tube-drone" class="tube"><i></i><b></b><span class="tl">дрон</span><span class="tk">1</span></button>
+    <button id="tube-drum"  class="tube"><i></i><b></b><span class="tl">дарбука</span><span class="tk">2</span></button>
+    <button id="tube-choir" class="tube"><i></i><b></b><span class="tl">хор</span><span class="tk">3</span></button>
   </div>
-  <p class="tip">Держи трубку — слой растёт. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.</p>
+  <p class="tip">Держи трубку — слой растёт и слышен в спектре. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.</p>
 </section>
 
 <!-- ── роль II · Танцующий ────────────────────────────────────── -->
@@ -75,6 +82,7 @@
   <div id="floorwrap" class="floor">
     <canvas id="floor"></canvas>
     <div id="phase" class="phase"></div>
+    <div id="combo" class="combo"></div>
   </div>
   <p class="tip">Жми в тот момент, когда метка садится на кольцо. Мимо — резонанс растёт.</p>
 </section>

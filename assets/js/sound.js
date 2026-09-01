@@ -17,6 +17,14 @@ const Sound = (() => {
 
   let strVoices = [];             /* перегретая струна: то, что слышит слепой */
   let choirNodes = null;
+  let drumBus = null;             /* шина ударных: нужна, чтобы их было чем мерить */
+
+  /* Анализаторы. Один на выходе — из него берётся настоящая осциллограмма
+     и спектр. Ещё три поменьше сидят на слоях: по ним подсвечиваются
+     трубки, и связь «нажал вот эту — поднялось вот это» становится видна */
+  let anaOut = null;
+  const anaBus = { drone: null, drum: null, choir: null };
+  const busBuf = { drone: null, drum: null, choir: null };
 
   const sixteenth = () => 60 / bpm / 4;
 
@@ -52,6 +60,7 @@ const Sound = (() => {
     droneGain = ctx.createGain();
     droneGain.gain.value = 0;
     droneGain.connect(dry); droneGain.connect(wet);
+    droneGain.connect(anaBus.drone);
 
     [41.20, 61.74, 82.41, 92.50, 123.47].forEach((f, i) => {
       [0, 1].forEach((k) => {
@@ -87,7 +96,7 @@ const Sound = (() => {
   /* ── хор из собора: формантный пад ── */
   function choir() {
     const out = ctx.createGain(); out.gain.value = 0;
-    out.connect(wet); out.connect(dry);
+    out.connect(wet); out.connect(dry); out.connect(anaBus.choir);
     /* три форманты на голос, две расстроенные пары — получается «а-а» */
     [[329.63, 700, 1220], [392.00, 660, 1100], [493.88, 730, 1300]].forEach((v, i) => {
       const o = ctx.createOscillator();
@@ -118,7 +127,7 @@ const Sound = (() => {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(v, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.46);
-    o.connect(g); g.connect(dry); g.connect(wet);
+    o.connect(g); g.connect(drumBus);
     o.start(t); o.stop(t + 0.5);
 
     const s = ctx.createBufferSource(); s.buffer = noiseBuf(0.1);
@@ -126,7 +135,7 @@ const Sound = (() => {
     const ng = ctx.createGain();
     ng.gain.setValueAtTime(v * 0.5, t);
     ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    s.connect(lp); lp.connect(ng); ng.connect(dry);
+    s.connect(lp); lp.connect(ng); ng.connect(drumBus);
     s.start(t); s.stop(t + 0.1);
   }
 
@@ -138,7 +147,7 @@ const Sound = (() => {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(v, t + 0.002);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.085);
-    s.connect(bp); bp.connect(g); g.connect(dry); g.connect(wet);
+    s.connect(bp); bp.connect(g); g.connect(drumBus);
     s.start(t); s.stop(t + 0.2);
   }
 
@@ -149,7 +158,7 @@ const Sound = (() => {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(v, t + 0.003);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
-    s.connect(hp); hp.connect(g); g.connect(dry);
+    s.connect(hp); hp.connect(g); g.connect(drumBus);
     s.start(t); s.stop(t + 0.15);
   }
 
@@ -208,12 +217,30 @@ const Sound = (() => {
     master = ctx.createGain(); master.gain.value = 0;
     cut = ctx.createBiquadFilter();
     cut.type = 'lowpass'; cut.frequency.value = 5200;
-    master.connect(cut); cut.connect(ctx.destination);
+
+    /* Анализатор стоит последним звеном: то, что он показывает, —
+       ровно то, что слышно, а не отдельно нарисованная картинка */
+    anaOut = ctx.createAnalyser();
+    anaOut.fftSize = 2048;
+    anaOut.smoothingTimeConstant = 0.72;
+    master.connect(cut); cut.connect(anaOut); anaOut.connect(ctx.destination);
 
     dry = ctx.createGain(); dry.gain.value = 0.85; dry.connect(master);
     const conv = ctx.createConvolver(); conv.buffer = impulse(5.5, 3.2);
     wet = ctx.createGain(); wet.gain.value = 0.5;
     wet.connect(conv); conv.connect(master);
+
+    /* Анализаторы слоёв — тупики: звук в них заходит и дальше не идёт,
+       поэтому подключать их к выходу не нужно и ничего не удваивается */
+    ['drone', 'drum', 'choir'].forEach((k) => {
+      const a = ctx.createAnalyser();
+      a.fftSize = 128; a.smoothingTimeConstant = 0.6;
+      anaBus[k] = a;
+      busBuf[k] = new Uint8Array(a.frequencyBinCount);
+    });
+
+    drumBus = ctx.createGain(); drumBus.gain.value = 1;
+    drumBus.connect(dry); drumBus.connect(wet); drumBus.connect(anaBus.drum);
 
     drone(); choir(); string();
     built = true;
@@ -266,6 +293,23 @@ const Sound = (() => {
     onStep(fn) { onStep = fn; },
     now: () => (ctx ? ctx.currentTime : 0),
     stepLen: sixteenth,
+
+    /* ── что показывать ──
+       Всё ниже читается прямо из графа: рисуется настоящий звук,
+       а не отдельная анимация, которая просто похожа на него */
+    waveSize: () => (anaOut ? anaOut.fftSize : 0),
+    freqSize: () => (anaOut ? anaOut.frequencyBinCount : 0),
+    readWave(buf) { if (anaOut) anaOut.getByteTimeDomainData(buf); },
+    readFreq(buf) { if (anaOut) anaOut.getByteFrequencyData(buf); },
+    /* уровень слоя 0…1: среднее по его спектру */
+    level(name) {
+      const a = anaBus[name], b = busBuf[name];
+      if (!a || !b) return 0;
+      a.getByteFrequencyData(b);
+      let s = 0;
+      for (let i = 0; i < b.length; i++) s += b[i];
+      return Math.min(1, (s / b.length) / 110);
+    },
 
     /* ── одиночные события ── */
     /* попадание в долю */
