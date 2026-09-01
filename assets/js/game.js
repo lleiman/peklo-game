@@ -41,6 +41,20 @@ const Shaman = (() => {
   let hall, hx, scope, sx_;
   let wbuf = null, fbuf = null;
 
+  /* Вариант партии: 'hold' — держать трубки (первый, самый простой),
+     'field' — вести Организм по полю настройки. Во втором жар идёт
+     не от громкости, а от совпадения: резонанс — это попадание
+     в чужую частоту, а не давление на неё */
+  let variant = 'hold';
+  let f = { x: 0.5, y: 0.5 }, pf = { x: 0.5, y: 0.5 }, madPt = null, madT = 0;
+  let pad, px_, padOn = false;
+
+  /* Константы поля подобраны прогоном пяти стратегий по 80 партий:
+     стоять на месте — проигрыш, дёргаться — проигрыш, медленный обход —
+     проигрыш, точное слежение — победа за 58 с, неточное — за 73 с */
+  const F = { range: 0.26, gain: 0.0042, cool: 0.0028, drift: 0.0022,
+              jerkAt: 0.035, jerkK: 3, mSlow: 0.085, mFast: 0.30 };
+
   function reset() {
     dancers = [];
     for (let i = 0; i < N; i++) {
@@ -55,11 +69,16 @@ const Shaman = (() => {
         /* собственное сердце: у каждого свой ритм и своя фаза */
         phase: Math.random() * Math.PI * 2,
         rate: 0.75 + Math.random() * 0.35,
-        px: 0, py: 0, seed: Math.random()
+        px: 0, py: 0, seed: Math.random(),
+        /* своя точка в поле настройки и медленный дрейф: тело устаёт,
+           совпадение уходит, и его приходится вести */
+        tx: Math.random(), ty: Math.random(),
+        vx: (Math.random() - 0.5) * F.drift, vy: (Math.random() - 0.5) * F.drift
       });
     }
     layout();
     madam = 0; held = {}; burning = null;
+    f = { x: 0.5, y: 0.5 }; pf = { x: 0.5, y: 0.5 }; madPt = null; madT = 0;
     Sound.setLayer('drone', 0); Sound.setLayer('drum', 0); Sound.setLayer('choir', 0);
     Sound.setHeat(0);
   }
@@ -81,7 +100,48 @@ const Shaman = (() => {
     return { r: m, d: who };
   }
 
+  /* ── вариант «настройка» ──
+     Жар идёт от совпадения точки Организма с точкой тела, а не от
+     громкости. Поэтому держать всё на максимуме бессмысленно само по
+     себе: это угол поля, где почти никого нет */
+  function stepField() {
+    madT += 0.1;
+    /* Мадам поёт раз в пятнадцать секунд и висит восемь */
+    if (madT >= 15) { madT = 0; madPt = { x: Math.random(), y: Math.random(), left: 8 }; }
+    if (madPt) { madPt.left -= 0.1; if (madPt.left <= 0) madPt = null; }
+
+    /* рваная музыка роняет весь зал: под неё не танцуют */
+    const jerk = Math.hypot(f.x - pf.x, f.y - pf.y) > F.jerkAt ? F.jerkK : 1;
+    pf = { x: f.x, y: f.y };
+
+    /* рядом с её нотой жар сильнее, но и она набирает быстрее */
+    let mm = 1, mrate = F.mSlow;
+    if (madPt && Math.hypot(f.x - madPt.x, f.y - madPt.y) < 0.2) { mm = 1.6; mrate = F.mFast; }
+
+    dancers.forEach((d) => {
+      d.tx += d.vx; d.ty += d.vy;
+      if (d.tx <= 0 || d.tx >= 1) d.vx *= -1;
+      if (d.ty <= 0 || d.ty >= 1) d.vy *= -1;
+      d.tx = Math.max(0, Math.min(1, d.tx)); d.ty = Math.max(0, Math.min(1, d.ty));
+      const g = Math.max(0, 1 - Math.hypot(f.x - d.tx, f.y - d.ty) / F.range);
+      d.heat = Math.max(0, d.heat + g * F.gain * mm - F.cool * jerk);
+    });
+
+    const { r, d } = hallMax();
+    Sound.setHeat(r);
+    /* положение в поле ведёт сам звук: низ ↔ верх, плотно ↔ разреженно */
+    Sound.setLayer('drone', 0.25 + (1 - f.y) * 0.7);
+    Sound.setLayer('drum', 0.2 + f.x * 0.75);
+    Sound.setLayer('choir', 0.1 + f.y * 0.6);
+
+    madam += (r < 0.35 ? F.mSlow * 1.5 : mrate);
+    if (d && d.heat >= d.limit) return finish('burn', d);
+    if (madam >= 100) return finish('madam', d);
+    $('#madam').style.setProperty('--v', (madam / 100).toFixed(3));
+  }
+
   function step() {
+    if (variant === 'field') return stepField();
     const L = Sound.layers;
     const total = L.drone + L.drum + L.choir;
     /* Перебор громкости зал не разогревает, а разгоняет: когда давит всё
@@ -213,11 +273,42 @@ const Shaman = (() => {
     sx_.stroke();
   }
 
+  /* ── поле настройки ──
+     Стоит отдельно от зала и никогда на него не накладывается: водить
+     точку по головам читалось бы как прицеливание, а выбирать жертву
+     нельзя. Ты настраиваешь Организм, зал — следствие */
+  function drawPad() {
+    const w = pad.width, h = pad.height, dpr = DPR();
+    px_.clearRect(0, 0, w, h);
+    px_.strokeStyle = 'rgba(30,28,25,1)'; px_.lineWidth = dpr;
+    px_.strokeRect(0.5, 0.5, w - 1, h - 1);
+    for (let i = 1; i < 4; i++) {
+      px_.beginPath();
+      px_.moveTo((w / 4) * i, 0); px_.lineTo((w / 4) * i, h);
+      px_.moveTo(0, (h / 4) * i); px_.lineTo(w, (h / 4) * i);
+      px_.stroke();
+    }
+    /* её нота */
+    if (madPt) {
+      const g = px_.createRadialGradient(madPt.x * w, madPt.y * h, 0, madPt.x * w, madPt.y * h, 0.2 * w);
+      g.addColorStop(0, 'rgba(160,106,154,.5)');
+      g.addColorStop(1, 'rgba(160,106,154,0)');
+      px_.fillStyle = g;
+      px_.beginPath(); px_.arc(madPt.x * w, madPt.y * h, 0.2 * w, 0, 6.2832); px_.fill();
+    }
+    /* точка Организма и её радиус совпадения */
+    px_.strokeStyle = 'rgba(255,106,31,.35)'; px_.lineWidth = dpr;
+    px_.beginPath(); px_.arc(f.x * w, f.y * h, F.range * w * 0.5, 0, 6.2832); px_.stroke();
+    px_.fillStyle = 'rgba(255,106,31,1)';
+    px_.beginPath(); px_.arc(f.x * w, f.y * h, 5 * dpr, 0, 6.2832); px_.fill();
+  }
+
   function draw() {
     if (!running && !burning) return;
     const now = performance.now() / 1000;
     drawHall(now);
     drawScope();
+    if (variant === 'field' && pad) drawPad();
     /* трубки светятся своим звуком, а не своим значением */
     ['drone', 'drum', 'choir'].forEach((k) => {
       const el = $('#tube-' + k);
@@ -269,6 +360,27 @@ const Shaman = (() => {
         document.querySelectorAll('.modes .m').forEach((x) => x.classList.toggle('on', x === b));
       });
     });
+
+    /* поле настройки: точка идёт за пальцем, но резкие рывки наказываются
+       в самой механике, а не запретом — вести приходится плавно */
+    const p = $('#pad');
+    const at = (e) => {
+      const r = p.getBoundingClientRect();
+      f.x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      f.y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    };
+    p.addEventListener('pointerdown', (e) => { e.preventDefault(); padOn = true; at(e); });
+    p.addEventListener('pointermove', (e) => { if (padOn) at(e); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) =>
+      p.addEventListener(ev, () => { padOn = false; }));
+    addEventListener('keydown', (e) => {
+      if (!running || variant !== 'field') return;
+      const s = 0.03;
+      if (e.code === 'ArrowLeft')  f.x = Math.max(0, f.x - s);
+      if (e.code === 'ArrowRight') f.x = Math.min(1, f.x + s);
+      if (e.code === 'ArrowUp')    f.y = Math.max(0, f.y - s);
+      if (e.code === 'ArrowDown')  f.y = Math.min(1, f.y + s);
+    });
   }
 
   function fit(c) {
@@ -278,10 +390,16 @@ const Shaman = (() => {
 
   return {
     init() { bind(); },
-    start() {
+    start(v) {
+      variant = v || 'hold';
+      $('#shaman').classList.toggle('v-field', variant === 'field');
+      $('#sh-tip').textContent = variant === 'field'
+        ? 'Веди точку Организма по полю. Жар идёт от совпадения, а не от громкости: попал в чужую частоту — он греется. Цель уходит, её надо вести. Дёргаться нельзя — под рваную музыку не танцуют.'
+        : 'Держи трубку — слой растёт и слышен в спектре. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.';
       hall = $('#hall'); hx = hall.getContext('2d');
       scope = $('#scope'); sx_ = scope.getContext('2d');
-      fit(hall); fit(scope);
+      pad = $('#pad'); px_ = pad.getContext('2d');
+      fit(hall); fit(scope); fit(pad);
       reset();
       running = true; t0 = performance.now();
       Sound.setTempo(72);
@@ -549,15 +667,22 @@ const End = (() => {
 
   Shaman.init();
   Dancer.init();
+  Arcade.init();
 
-  $('#pick-shaman').addEventListener('click', () => { show('#shaman'); Shaman.start(); });
-  $('#pick-dancer').addEventListener('click', () => { show('#dancer'); Dancer.start(); });
-
-  document.querySelectorAll('.again').forEach((b) =>
-    b.addEventListener('click', () => { Sound.stop(0.4); show('#pick'); }));
-
-  document.querySelectorAll('.quit').forEach((b) =>
+  /* каждая роль объявляет, чем она запускается */
+  document.querySelectorAll('.role').forEach((b) => {
     b.addEventListener('click', () => {
-      Shaman.stop(); Dancer.stop(); Sound.stop(0.5); show('#pick');
-    }));
+      const who = b.dataset.who;
+      if (who === 'shaman-hold')  { show('#shaman'); Shaman.start('hold'); }
+      else if (who === 'shaman-field') { show('#shaman'); Shaman.start('field'); }
+      else if (who === 'dancer')  { show('#dancer'); Dancer.start(); }
+      else { show('#arcade'); Arcade.start(who); }
+    });
+  });
+
+  const backToPick = () => {
+    Shaman.stop(); Dancer.stop(); Arcade.stop(); Sound.stop(0.5); show('#pick');
+  };
+  document.querySelectorAll('.again').forEach((b) => b.addEventListener('click', backToPick));
+  document.querySelectorAll('.quit').forEach((b) => b.addEventListener('click', backToPick));
 })();

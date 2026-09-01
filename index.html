@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="assets/img/favicon.png">
-<meta name="description" content="ПЕКЛО — игра по роману «ТехноШаман». Вести музыку или удержаться в танце.">
+<meta name="description" content="ПЕКЛО — игра по роману «ТехноШаман». Семь ролей, у каждой своя механика.">
 <meta name="theme-color" content="#050505">
 <title>ПЕКЛО · игра</title>
 <link rel="stylesheet" href="assets/css/style.css">
@@ -20,24 +20,66 @@
     <div class="rule"></div>
 
     <div class="roles">
-      <button id="pick-shaman" class="role">
-        <span class="n">I</span>
-        <span class="t">Шаман</span>
-        <span class="d">Ты ведёшь музыку. Зала ты не видишь — для этого не нужны глаза. Держи резонанс, пока кто-нибудь в него не попадёт. Кто это будет, не знаешь и ты.</span>
+      <button class="role" data-who="shaman-field">
+        <span class="n">Шаман · настройка</span>
+        <span class="t">Вести</span>
+        <span class="d">Резонанс — это совпадение, а не громкость. Води Организм по полю и лови чужую частоту. Совпал — он греется. Цель уходит, её надо вести, а дёргаться нельзя: под рваную музыку не танцуют.</span>
         <span class="go">вести →</span>
       </button>
 
-      <button id="pick-dancer" class="role">
-        <span class="n">II</span>
-        <span class="t">Танцующий</span>
-        <span class="d">Ты в зале, и пол уже тёплый. Три часа. Работа одна — не сбиться с ритма: сбившийся попадает в резонанс первым.</span>
+      <button class="role" data-who="dancer">
+        <span class="n">Танцующий</span>
+        <span class="t">Не сбиться</span>
+        <span class="d">Ты в зале, пол уже тёплый. Три часа. Работа одна — держать ритм: сбившийся попадает в резонанс первым.</span>
         <span class="go">войти →</span>
+      </button>
+
+      <button class="role" data-who="photo">
+        <span class="n">Фотограф</span>
+        <span class="t">Ловить</span>
+        <span class="d">Работай фрагментами: целое отвлекает. Молчание — ресурс. Не сказала слова — она старается сильнее, кадр дороже, а натура горячее.</span>
+        <span class="go">снимать →</span>
+      </button>
+
+      <button class="role" data-who="kaze">
+        <span class="n">Казе</span>
+        <span class="t">Нырять</span>
+        <span class="d">Погружение в чужое сознание: мир без изображений, плотный от звука. Глубже — больше видишь, но там она. Решай каждую секунду: ещё ниже или наверх.</span>
+        <span class="go">погрузиться →</span>
+      </button>
+
+      <button class="role" data-who="fresher">
+        <span class="n">Фрешер</span>
+        <span class="t">Гнать</span>
+        <span class="d">Молчаливый поединок и гонка по мокрым улицам. Всё решает одно: когда отпустить перед поворотом.</span>
+        <span class="go">рвануть →</span>
+      </button>
+
+      <button class="role" data-who="madam">
+        <span class="n">Мадам</span>
+        <span class="t">Просачиваться</span>
+        <span class="d">Ты поёшь сверху и входишь в чужую музыку. Идти надо не по волне, а против неё — во впадины. Он сопротивляется и меняет частоту.</span>
+        <span class="go">петь →</span>
+      </button>
+
+      <button class="role" data-who="model">
+        <span class="n">Модель</span>
+        <span class="t">Поднимать</span>
+        <span class="d">Выиграть нельзя. Признание не сдвинется ни разу, и это видно с первой секунды. Играется только то, как высоко успеешь поднять ставку.</span>
+        <span class="go">выйти в зал →</span>
+      </button>
+
+      <button class="role dim" data-who="shaman-hold">
+        <span class="n">Шаман · удержание</span>
+        <span class="t">Держать</span>
+        <span class="d">Первый вариант, самый простой: три трубки, держи две из трёх. Оставлен для сравнения — решение тут принимается один раз.</span>
+        <span class="go">держать →</span>
       </button>
     </div>
   </div>
 </section>
 
-<!-- ── роль I · Шаман ─────────────────────────────────────────── -->
+<!-- ── Шаман ──────────────────────────────────────────────────── -->
 <section id="shaman" class="screen game">
   <header class="hud">
     <div class="who">Шаман</div>
@@ -60,15 +102,19 @@
 
   <canvas id="scope"></canvas>
 
+  <!-- поле настройки: только в варианте «вести». Стоит отдельно от зала
+       намеренно — водить точку по головам читалось бы как прицеливание -->
+  <div class="padwrap"><canvas id="pad"></canvas><span class="pl">поле настройки Организма</span></div>
+
   <div class="tubes">
     <button id="tube-drone" class="tube"><i></i><b></b><span class="tl">дрон</span><span class="tk">1</span></button>
     <button id="tube-drum"  class="tube"><i></i><b></b><span class="tl">дарбука</span><span class="tk">2</span></button>
     <button id="tube-choir" class="tube"><i></i><b></b><span class="tl">хор</span><span class="tk">3</span></button>
   </div>
-  <p class="tip">Держи трубку — слой растёт и слышен в спектре. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.</p>
+  <p class="tip" id="sh-tip"></p>
 </section>
 
-<!-- ── роль II · Танцующий ────────────────────────────────────── -->
+<!-- ── Танцующий ──────────────────────────────────────────────── -->
 <section id="dancer" class="screen game">
   <header class="hud">
     <div class="who">Танцующий</div>
@@ -85,6 +131,24 @@
     <div id="combo" class="combo"></div>
   </div>
   <p class="tip">Жми в тот момент, когда метка садится на кольцо. Мимо — резонанс растёт.</p>
+</section>
+
+<!-- ── общий экран пяти персонажей ────────────────────────────── -->
+<section id="arcade" class="screen game">
+  <header class="hud">
+    <div class="who" id="ar-who"></div>
+    <div class="madam-wrap">
+      <span class="lab" id="ar-la"></span>
+      <div id="ar-a" class="bar"><i></i></div>
+      <span class="lab" id="ar-lb"></span>
+      <div id="ar-b" class="bar hot"><i></i></div>
+    </div>
+    <button class="quit" aria-label="Выйти">выйти</button>
+  </header>
+
+  <div class="arena"><canvas id="arena"></canvas><div id="ar-count" class="combo"></div></div>
+  <button id="ar-speak" class="speak">сказать слово</button>
+  <p class="tip" id="ar-tip"></p>
 </section>
 
 <!-- ── финал ──────────────────────────────────────────────────── -->
@@ -110,6 +174,7 @@
 </div>
 
 <script src="assets/js/sound.js" defer></script>
+<script src="assets/js/arcade.js" defer></script>
 <script src="assets/js/game.js" defer></script>
 </body>
 </html>
