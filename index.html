@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="assets/img/favicon.png">
+<meta name="description" content="ПЕКЛО — игра по роману «ТехноШаман». Вести музыку или удержаться в танце.">
+<meta name="theme-color" content="#050505">
+<title>ПЕКЛО · игра</title>
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- ── выбор роли ─────────────────────────────────────────────── -->
+<section id="pick" class="screen">
+  <img class="brand" src="assets/img/logo.png" alt="">
+  <div class="inner">
+    <div class="kick">пекло · ночь третья</div>
+    <h1>Кем ты сегодня</h1>
+    <div class="rule"></div>
+
+    <div class="roles">
+      <button id="pick-shaman" class="role">
+        <span class="n">I</span>
+        <span class="t">Шаман</span>
+        <span class="d">Ты ведёшь музыку. Зала ты не видишь — для этого не нужны глаза. Держи резонанс, пока кто-нибудь в него не попадёт. Кто это будет, не знаешь и ты.</span>
+        <span class="go">вести →</span>
+      </button>
+
+      <button id="pick-dancer" class="role">
+        <span class="n">II</span>
+        <span class="t">Танцующий</span>
+        <span class="d">Ты в зале, и пол уже тёплый. Три часа. Работа одна — не сбиться с ритма: сбившийся попадает в резонанс первым.</span>
+        <span class="go">войти →</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ── роль I · Шаман ─────────────────────────────────────────── -->
+<section id="shaman" class="screen game">
+  <header class="hud">
+    <div class="who">Шаман</div>
+    <div class="madam-wrap">
+      <span class="lab">Мадам</span>
+      <div id="madam" class="bar"><i></i></div>
+    </div>
+    <button class="quit" aria-label="Выйти">выйти</button>
+  </header>
+
+  <div class="listen">
+    <canvas id="wave"></canvas>
+    <div class="hint">то, что слышно из зала</div>
+  </div>
+
+  <div class="tubes">
+    <button id="tube-drone" class="tube"><i></i><span class="tl">дрон</span><span class="tk">1</span></button>
+    <button id="tube-drum"  class="tube"><i></i><span class="tl">дарбука</span><span class="tk">2</span></button>
+    <button id="tube-choir" class="tube"><i></i><span class="tl">хор</span><span class="tk">3</span></button>
+  </div>
+  <p class="tip">Держи трубку — слой растёт. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.</p>
+</section>
+
+<!-- ── роль II · Танцующий ────────────────────────────────────── -->
+<section id="dancer" class="screen game">
+  <header class="hud">
+    <div class="who">Танцующий</div>
+    <div class="madam-wrap">
+      <span class="lab">резонанс</span>
+      <div id="res" class="bar hot"><i></i></div>
+    </div>
+    <button class="quit" aria-label="Выйти">выйти</button>
+  </header>
+
+  <div id="floorwrap" class="floor">
+    <canvas id="floor"></canvas>
+    <div id="phase" class="phase"></div>
+  </div>
+  <p class="tip">Жми в тот момент, когда метка садится на кольцо. Мимо — резонанс растёт.</p>
+</section>
+
+<!-- ── финал ──────────────────────────────────────────────────── -->
+<section id="end" class="screen">
+  <div class="inner">
+    <div id="end-kick" class="kick"></div>
+    <h1 id="end-title"></h1>
+    <div class="rule"></div>
+    <p id="end-body" class="body"></p>
+    <button class="again">ещё раз</button>
+    <a class="back" href="https://lleiman.github.io/chapter-site/">читать главу →</a>
+  </div>
+</section>
+
+<!-- ── ворота ─────────────────────────────────────────────────── -->
+<div id="gate">
+  <button id="burn" type="button" aria-label="Burn me — войти">
+    <span class="scale" aria-hidden="true"></span>
+    <span class="ring" aria-hidden="true"></span>
+    <span class="iris" aria-hidden="true"></span>
+    <span class="lab">Burn me</span>
+  </button>
+</div>
+
+<script src="assets/js/sound.js" defer></script>
+<script src="assets/js/game.js" defer></script>
+</body>
+</html>
