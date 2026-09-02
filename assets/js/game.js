@@ -48,6 +48,8 @@ const Shaman = (() => {
   let variant = 'hold';
   let f = { x: 0.5, y: 0.5 }, pf = { x: 0.5, y: 0.5 }, madPt = null, madT = 0;
   let pad, px_, padOn = false;
+  /* вариант «ритм»: уровни слоёв поднимаются попаданиями и оседают сами */
+  let bl = [0, 0, 0], beatBar = 0;
 
   /* Константы поля подобраны прогоном пяти стратегий по 80 партий:
      стоять на месте — проигрыш, дёргаться — проигрыш, медленный обход —
@@ -140,8 +142,38 @@ const Shaman = (() => {
     $('#madam').style.setProperty('--v', (madam / 100).toFixed(3));
   }
 
+  /* ── вариант «ритм» ──
+     Шаман не держит слой, а играет его: нота пришла — ударил, длинная
+     нота — тянешь. Пока слой звучит, зал по нему греется.
+     Числа подобраны прогоном по 150 партий на уровень точности:
+     100% — победа за 56 с, 90% — 97% за 61 с, 80% — 81% за 65 с,
+     65% — 21%, ниже половины — никогда. Первый подбор давал победу
+     даже при 40% точности за двадцать секунд, то есть игры не было */
+  function stepBeat() {
+    bl = bl.map((v) => Math.max(0, v - 0.045));
+    Sound.setLayer('drone', bl[0]);
+    Sound.setLayer('drum',  bl[1]);
+    Sound.setLayer('choir', bl[2]);
+
+    const total = bl[0] + bl[1] + bl[2];
+    const scatter = total > 2.3 ? 2.6 : 1;
+    dancers.forEach((d) => {
+      const drive = bl[0] * d.w[0] + bl[1] * d.w[1] + bl[2] * d.w[2];
+      d.heat += drive * 0.0030 - 0.0007 * scatter;
+      if (d.heat < 0) d.heat = 0;
+    });
+
+    const { r, d } = hallMax();
+    Sound.setHeat(r);
+    madam += (r < 0.35 ? 0.155 : 0.115);
+    if (d && d.heat >= d.limit) return finish('burn', d);
+    if (madam >= 100) return finish('madam', d);
+    $('#madam').style.setProperty('--v', (madam / 100).toFixed(3));
+  }
+
   function step() {
     if (variant === 'field') return stepField();
+    if (variant === 'beat') return stepBeat();
     const L = Sound.layers;
     const total = L.drone + L.drum + L.choir;
     /* Перебор громкости зал не разогревает, а разгоняет: когда давит всё
@@ -317,6 +349,7 @@ const Shaman = (() => {
     if (Glow.ready()) { Glow.step(dt); Glow.end(1.5); }
     drawScope();
     if (variant === 'field' && pad) drawPad();
+    if (variant === 'beat' && pad) { Lanes.step(dt); Lanes.draw(); }
     /* трубки светятся своим звуком, а не своим значением */
     ['drone', 'drum', 'choir'].forEach((k) => {
       const el = $('#tube-' + k);
@@ -344,6 +377,19 @@ const Shaman = (() => {
     }
   }
 
+  /* Чарт Шамана: дарбука идёт из настоящего рисунка ударных, дрон и хор —
+     длинные ноты, которые надо тянуть. Это и есть бывшее «удержание»,
+     но теперь у него есть момент начала и конца */
+  function beatChart(stp, time, bar) {
+    const p = Sound.patterns();
+    if (p.doum[stp] !== undefined || p.tek[stp] !== undefined) Lanes.push(1, time, 0);
+    if (stp === 0 && bar !== beatBar) {
+      beatBar = bar;
+      if (bar % 2 === 1) Lanes.push(0, time, 2.4);
+      if (bar % 4 === 2) Lanes.push(2, time, 1.8);
+    }
+  }
+
   function bind() {
     ['drone', 'drum', 'choir'].forEach((k) => {
       const el = $('#tube-' + k);
@@ -355,11 +401,23 @@ const Shaman = (() => {
       el.addEventListener('pointercancel', up);
     });
     const KEY = { Digit1: 'drone', Digit2: 'drum', Digit3: 'choir' };
+    const LANE = { Digit1: 0, Digit2: 1, Digit3: 2 };
     addEventListener('keydown', (e) => {
+      if (!running) return;
+      if (variant === 'beat') {
+        const l = LANE[e.code];
+        if (l !== undefined && !e.repeat) { e.preventDefault(); Lanes.press(l); }
+        return;
+      }
       const k = KEY[e.code];
-      if (k && running) { held[k] = true; $('#tube-' + k).classList.add('push'); }
+      if (k) { held[k] = true; $('#tube-' + k).classList.add('push'); }
     });
     addEventListener('keyup', (e) => {
+      if (variant === 'beat') {
+        const l = LANE[e.code];
+        if (l !== undefined) Lanes.release(l);
+        return;
+      }
       const k = KEY[e.code];
       if (k) { held[k] = false; $('#tube-' + k).classList.remove('push'); }
     });
@@ -378,10 +436,21 @@ const Shaman = (() => {
       f.x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
       f.y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
     };
-    p.addEventListener('pointerdown', (e) => { e.preventDefault(); padOn = true; at(e); });
-    p.addEventListener('pointermove', (e) => { if (padOn) at(e); });
+    const laneOf = (e) => {
+      const r = p.getBoundingClientRect();
+      return Lanes.laneAt((e.clientX - r.left) / r.width);
+    };
+    p.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (variant === 'beat') { if (running) Lanes.press(laneOf(e)); return; }
+      padOn = true; at(e);
+    });
+    p.addEventListener('pointermove', (e) => { if (padOn && variant === 'field') at(e); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) =>
-      p.addEventListener(ev, () => { padOn = false; }));
+      p.addEventListener(ev, (e) => {
+        padOn = false;
+        if (variant === 'beat' && running) Lanes.release(laneOf(e));
+      }));
     addEventListener('keydown', (e) => {
       if (!running || variant !== 'field') return;
       const s = 0.03;
@@ -402,9 +471,11 @@ const Shaman = (() => {
     start(v) {
       variant = v || 'hold';
       $('#shaman').classList.toggle('v-field', variant === 'field');
-      $('#sh-tip').textContent = variant === 'field'
-        ? 'Веди точку Организма по полю. Жар идёт от совпадения, а не от громкости: попал в чужую частоту — он греется. Цель уходит, её надо вести. Дёргаться нельзя — под рваную музыку не танцуют.'
-        : 'Держи трубку — слой растёт и слышен в спектре. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.';
+      $('#shaman').classList.toggle('v-beat', variant === 'beat');
+      $('#sh-tip').textContent =
+        variant === 'field' ? 'Веди точку Организма по полю. Жар идёт от совпадения, а не от громкости: попал в чужую частоту — он греется. Цель уходит, её надо вести. Дёргаться нельзя — под рваную музыку не танцуют.'
+      : variant === 'beat' ? 'Играй Организм: нота пришла — бей, длинная нота — тяни. Клавиши 1 2 3 или пальцем по своей трети поля. Пока слой звучит, зал по нему греется.'
+      : 'Держи трубку — слой растёт и слышен в спектре. Отпустишь — оседает. Дави всем сразу, и зал разойдётся к стенам.';
       hall = $('#hall'); hx = hall.getContext('2d');
       scope = $('#scope'); sx_ = scope.getContext('2d');
       pad = $('#pad'); px_ = pad.getContext('2d');
@@ -412,6 +483,18 @@ const Shaman = (() => {
       /* слой свечения: если WebGL2 нет, игра идёт на 2D-запаске */
       Glow.init($('#hall-gl'));
       lastT = 0;
+      bl = [0, 0, 0]; beatBar = -1;
+      if (variant === 'beat') {
+        Lanes.init(pad, {
+          labels: ['дрон', 'дарбука', 'хор'],
+          keys: ['1', '2', '3'],
+          onHit: (exact, lane) => { bl[lane] = Math.min(1, bl[lane] + (exact ? 0.46 : 0.30)); },
+          onHold: (dt2, lane) => { bl[lane] = Math.min(1, bl[lane] + dt2 * 1.7); },
+          onMiss: () => { Sound.slip(); dancers.forEach((d) => { d.heat = Math.max(0, d.heat - 0.012); }); }
+        });
+        Lanes.reset();
+        Sound.onStep(beatChart);
+      }
       reset();
       running = true; t0 = performance.now();
       Sound.setTempo(72);
@@ -559,6 +642,7 @@ const Dancer = (() => {
       Glow.init($('#floor-gl'));
       Lanes.init(cv, {
         labels: ['доум', 'тек', 'шейкер'],
+        keys: ['A', 'S', 'D'],
         onHit: (exact) => { res += exact ? GOOD : OKH; },
         onMiss: () => { res += MISS; Sound.slip(); }
       });
@@ -640,6 +724,7 @@ const End = (() => {
       const who = b.dataset.who;
       if (who === 'shaman-hold')  { show('#shaman'); Shaman.start('hold'); }
       else if (who === 'shaman-field') { show('#shaman'); Shaman.start('field'); }
+      else if (who === 'shaman-beat')  { show('#shaman'); Shaman.start('beat'); }
       else if (who === 'dancer')  { show('#dancer'); Dancer.start(); }
       else { show('#arcade'); Arcade.start(who); }
     });

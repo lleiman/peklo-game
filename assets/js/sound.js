@@ -27,6 +27,7 @@ const Sound = (() => {
   const busBuf = { drone: null, drum: null, choir: null };
 
   const sixteenth = () => 60 / bpm / 4;
+  const AHEAD = 1.9;              /* на сколько вперёд планируем доли */
 
   /* ── шум и реверберация ── */
   function noiseBuf(sec) {
@@ -197,7 +198,11 @@ const Sound = (() => {
   /* ── планировщик ── */
   function tick() {
     const sx = sixteenth();
-    while (nextT < ctx.currentTime + 0.25) {
+    /* Горизонт планировщика. Для одного звука хватило бы четверти секунды,
+       но на этих же долях живут дорожки ритм-игры: нота должна выйти
+       на экран заранее и пролететь его целиком. Меньше AHEAD — и она
+       появляется у самой линии удара, играть физически невозможно */
+    while (nextT < ctx.currentTime + AHEAD) {
       const t = nextT + (Math.random() - 0.5) * 0.004;
       const d = L.drum;
       if (d > 0.02) {

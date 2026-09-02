@@ -18,6 +18,9 @@ const Lanes = (() => {
   let held = [false, false, false];
   let flash = [-9, -9, -9], flashOk = [true, true, true];
   let combo = 0, best = 0, judged = '', judgedT = -9;
+  /* Разбор управления держим на экране, пока игрок не нажал ни разу.
+     Мелкая подпись внизу не работает: её не читают */
+  let introT = 0, introDone = false;
 
   const D = () => Math.min(devicePixelRatio || 1, 2);
   const geo = () => {
@@ -34,6 +37,7 @@ const Lanes = (() => {
       notes = []; combo = 0; best = 0;
       held = [false, false, false];
       flash = [-9, -9, -9]; judged = ''; judgedT = -9;
+      introT = performance.now(); introDone = false;
     },
     /* поставить ноту: дорожка, время удара, длина удержания в секундах */
     push(lane, t, len) { notes.push({ lane, t, len: len || 0, hit: false, dead: false, done: 0 }); },
@@ -49,6 +53,7 @@ const Lanes = (() => {
         if (d < bd) { bd = d; pick = n; }
       });
       held[lane] = true;
+      introDone = true;
       if (!pick || bd > OK) {
         combo = 0; flash[lane] = performance.now(); flashOk[lane] = false;
         judged = 'мимо'; judgedT = performance.now();
@@ -105,25 +110,34 @@ const Lanes = (() => {
       cx.lineWidth = 2 * dpr;
       cx.beginPath(); cx.moveTo(0, line); cx.lineTo(w, line); cx.stroke();
 
-      /* цели */
+      /* Цели. Клавиша написана прямо в круге: в подписи мелким шрифтом
+         внизу экрана её никто не найдёт, а знать надо сразу */
+      const mono = getComputedStyle(document.body).getPropertyValue('--mono');
       for (let i = 0; i < N; i++) {
         const cxp = (i + 0.5) * lw;
         const fl = (performance.now() - flash[i]) / 240;
-        cx.strokeStyle = held[i] ? 'rgba(255,106,31,.9)' : 'rgba(74,71,65,.9)';
-        cx.lineWidth = (held[i] ? 2 : 1) * dpr;
-        cx.beginPath(); cx.arc(cxp, line, 15 * dpr, 0, 6.2832); cx.stroke();
+        const R = 22 * dpr;
+        cx.strokeStyle = held[i] ? 'rgba(255,106,31,.95)' : 'rgba(120,114,104,.9)';
+        cx.lineWidth = (held[i] ? 2.5 : 1.4) * dpr;
+        cx.beginPath(); cx.arc(cxp, line, R, 0, 6.2832); cx.stroke();
         if (fl < 1) {
           cx.strokeStyle = flashOk[i]
             ? `rgba(255,210,170,${(1 - fl) * 0.9})`
             : `rgba(150,60,40,${(1 - fl) * 0.85})`;
           cx.lineWidth = 2.5 * dpr;
-          cx.beginPath(); cx.arc(cxp, line, (15 + fl * 20) * dpr, 0, 6.2832); cx.stroke();
+          cx.beginPath(); cx.arc(cxp, line, R + fl * 20 * dpr, 0, 6.2832); cx.stroke();
+        }
+        if (cfg.keys) {
+          cx.font = `700 ${15 * dpr}px ${mono}`;
+          cx.textAlign = 'center'; cx.textBaseline = 'middle';
+          cx.fillStyle = held[i] ? 'rgba(255,106,31,1)' : 'rgba(200,196,189,.95)';
+          cx.fillText(cfg.keys[i], cxp, line + dpr);
         }
         if (cfg.labels) {
-          cx.font = `${9 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
+          cx.font = `${9.5 * dpr}px ${mono}`;
           cx.textAlign = 'center'; cx.textBaseline = 'top';
-          cx.fillStyle = 'rgba(74,71,65,1)';
-          cx.fillText(cfg.labels[i].toUpperCase(), cxp, line + 26 * dpr);
+          cx.fillStyle = 'rgba(120,114,104,1)';
+          cx.fillText(cfg.labels[i].toUpperCase(), cxp, line + 32 * dpr);
         }
       }
 
@@ -148,6 +162,37 @@ const Lanes = (() => {
         cx.fillStyle = 'rgba(242,239,233,.92)';
         cx.beginPath(); cx.arc(cxp, y, 7 * dpr, 0, 6.2832); cx.fill();
       });
+
+      /* Разбор управления: висит, пока не нажали ни разу, но не дольше
+         десяти секунд. Уходит с первого же нажатия */
+      const introAge = (performance.now() - introT) / 1000;
+      if (!introDone && introAge < 10) {
+        const a = introAge > 9 ? 10 - introAge : 1;
+        cx.fillStyle = `rgba(5,5,5,${0.72 * a})`;
+        cx.fillRect(0, 0, w, h);
+        cx.textAlign = 'center';
+        cx.fillStyle = `rgba(242,239,233,${0.9 * a})`;
+        cx.font = `${13 * dpr}px ${mono}`;
+        cx.textBaseline = 'middle';
+        cx.fillText('ЖМИ ДОРОЖКУ, ПО КОТОРОЙ ПРИШЛА НОТА', w / 2, h * 0.30);
+        for (let i = 0; i < N; i++) {
+          const cxp = (i + 0.5) * lw;
+          cx.strokeStyle = `rgba(255,106,31,${0.65 * a})`;
+          cx.lineWidth = 1.4 * dpr;
+          cx.beginPath(); cx.arc(cxp, h * 0.5, 30 * dpr, 0, 6.2832); cx.stroke();
+          cx.fillStyle = `rgba(255,106,31,${a})`;
+          cx.font = `700 ${22 * dpr}px ${mono}`;
+          cx.fillText(cfg.keys ? cfg.keys[i] : '', cxp, h * 0.5 + dpr);
+          if (cfg.labels) {
+            cx.fillStyle = `rgba(160,154,146,${a})`;
+            cx.font = `${10 * dpr}px ${mono}`;
+            cx.fillText(cfg.labels[i].toUpperCase(), cxp, h * 0.5 + 48 * dpr);
+          }
+        }
+        cx.fillStyle = `rgba(120,114,104,${a})`;
+        cx.font = `${11 * dpr}px ${mono}`;
+        cx.fillText('ИЛИ ПАЛЬЦЕМ ПО СВОЕЙ ТРЕТИ ЭКРАНА', w / 2, h * 0.68);
+      }
 
       /* оценка последнего нажатия — сдержанно, без похвал */
       const jt = (performance.now() - judgedT) / 650;
