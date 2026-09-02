@@ -436,67 +436,54 @@ const Shaman = (() => {
    РОЛЬ II · ТАНЦУЮЩИЙ
    ══════════════════════════════════════════════ */
 const Dancer = (() => {
-  /* Три часа танца из пролога — три фазы. Рисунок ударов по шестнадцатым */
+  /* Три часа танца из пролога — три фазы. Ноты берутся из настоящего
+     рисунка ударных: doum и tek приходят прямо из sound.js, третья
+     дорожка — акцент шейкера, он там идёт слишком часто для цели.
+     Значит, на дорожках та же музыка, что звучит, а не отдельный чарт */
+  const SH = [[4, 12], [2, 4, 12], [2, 4, 7, 12, 15]];
   const PHASE = [
-    { sec: 30, bpm: 72, hits: [0, 4, 8, 12],                 gain: 0.10, name: 'первый час' },
-    { sec: 34, bpm: 80, hits: [0, 4, 6, 8, 12, 14],          gain: 0.20, name: 'второй час' },
-    { sec: 38, bpm: 92, hits: [0, 3, 4, 8, 10, 11, 12, 14],  gain: 0.36, name: 'третий час' }
+    { sec: 30, bpm: 72, gain: 0.10, name: 'первый час' },
+    { sec: 34, bpm: 80, gain: 0.20, name: 'второй час' },
+    { sec: 38, bpm: 92, gain: 0.34, name: 'третий час' }
   ];
-  const LEAD = 1.35;
-  const GOOD = 0.095, OK = 0.17;
+  /* Прогон 400 партий на каждый уровень точности: 90% и выше — выходит
+     всегда, 85% — почти всегда, 80% — в сорока случаях из ста, 70% —
+     никогда. Сгорание при 80% приходится на третий час, как в прологе */
+  const GOOD = -1.7, OKH = -0.9, MISS = 4.0;
 
-  let notes = [], res = 0, phase = 0, phaseT = 0, running = false;
-  let cv, cx, raf = null, tickTimer = null, combo = 0, best = 0;
-  let flashT = -9, flashGood = true, judgeText = '', judgeT = -9;
+  let res = 0, phase = 0, phaseT = 0, running = false;
+  let cv, raf = null, tickTimer = null, lastT = 0;
 
   function reset() {
-    notes = []; res = 0; phase = 0; phaseT = 0; combo = 0; best = 0;
-    flashT = -9; judgeT = -9;
+    res = 0; phase = 0; phaseT = 0; lastT = 0;
+    Lanes.reset();
     Sound.setLayer('drone', 0.55);
     Sound.setLayer('drum', 0.75);
     Sound.setLayer('choir', 0.15);
     Sound.setHeat(0);
   }
 
+  /* планировщик отдаёт долю — раскладываем её по дорожкам */
   function schedule(step, time) {
     if (!running) return;
-    if (PHASE[phase].hits.indexOf(step) !== -1) notes.push({ t: time, hit: false, dead: false });
+    const p = Sound.patterns();
+    if (p.doum[step] !== undefined) Lanes.push(0, time, 0);
+    if (p.tek[step] !== undefined) Lanes.push(1, time, 0);
+    if (SH[phase].indexOf(step) !== -1) Lanes.push(2, time, 0);
   }
 
-  function say(text, good) {
-    judgeText = text; judgeT = performance.now();
-    flashT = performance.now(); flashGood = good;
-  }
-
-  function judge() {
-    if (!running) return;
-    const now = Sound.now();
-    let pick = null, bd = 9;
-    notes.forEach((n) => {
-      if (n.hit || n.dead) return;
-      const d = Math.abs(n.t - now);
-      if (d < bd) { bd = d; pick = n; }
-    });
-    if (!pick || bd > OK) { res += 2.5; combo = 0; Sound.slip(); say('мимо', false); return; }
-    /* Цена промаха и награда за точность подобраны прогоном по 200 партий
-       на уровень точности: 90% — выходит почти всегда, 85% — три раза
-       из четырёх, 80% — раз из восьми, ниже 70% — не выходит.
-       Сгорание при этом почти всегда приходится на третий час */
-    pick.hit = true;
-    if (bd <= GOOD) { res -= 2.4; combo++; Sound.hit(true); say('в такт', true); }
-    else            { res -= 1.2; combo++; Sound.hit(false); say('почти', true); }
-    if (combo > best) best = combo;
+  function banner(text) {
+    const b = $('#phase');
+    b.textContent = text;
+    b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   }
 
   function step() {
     if (!running) return;
-    const now = Sound.now();
-    notes.forEach((n) => {
-      if (!n.hit && !n.dead && now - n.t > OK) {
-        n.dead = true; res += 6; combo = 0; Sound.slip(); say('сбился', false);
-      }
-    });
-    notes = notes.filter((n) => now - n.t < 1.2);
+    const now = performance.now() / 1000;
+    const dt = lastT ? Math.min(0.2, now - lastT) : 0.1;
+    lastT = now;
+    Lanes.step(dt);
 
     res += PHASE[phase].gain;
     if (res < 0) res = 0;
@@ -512,89 +499,14 @@ const Dancer = (() => {
     }
     if (res >= 100) return finish('burn');
     $('#res').style.setProperty('--v', (res / 100).toFixed(3));
-    $('#combo').textContent = combo > 2 ? combo + ' подряд' : '';
-  }
-
-  function banner(text) {
-    const b = $('#phase');
-    b.textContent = text;
-    b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
+    $('#combo').textContent = Lanes.combo() > 2 ? Lanes.combo() + ' подряд' : '';
   }
 
   function draw() {
     if (!running) return;
-    const w = cv.width, h = cv.height, dpr = DPR();
-    const cxp = w / 2, cyp = h / 2;
-    const R = Math.min(w, h) * 0.21;
-    const OUT = Math.min(w, h) * 0.47;
-    const now = Sound.now();
-    const a = res / 100;
-    cx.clearRect(0, 0, w, h);
-
-    /* пол дышит настоящим битом: уровень берётся с шины ударных */
-    const kick = Sound.level('drum');
-
-    /* свет пола и метки уходят в слой WebGL */
-    if (Glow.ready()) {
-      Glow.resize(w, h);
-      Glow.begin();
-      Glow.blob(cxp, cyp, R * (2.6 + kick * 0.5), 0.12 + a * 0.75);
-      notes.forEach((n, i) => {
-        const dt2 = n.t - now;
-        if (dt2 > LEAD || n.hit) return;
-        const k = Math.max(0, dt2 / LEAD);
-        const rr = R + k * (OUT - R);
-        const ang = (i * 1.7) % 6.2832;
-        Glow.blob(cxp + Math.cos(ang) * rr, cyp + Math.sin(ang) * rr,
-                  (9 + (1 - k) * 12) * dpr, n.dead ? 0.05 : 0.25 + (1 - k) * 0.5);
-      });
-      Glow.step(1 / 60);
-      Glow.end(1.35);
-    }
-
-    const g = cx.createRadialGradient(cxp, cyp, R * 0.2, cxp, cyp, OUT * 1.6);
-    g.addColorStop(0, `rgba(255,60,10,${0.05 + a * 0.5 + kick * 0.1})`);
-    g.addColorStop(1, 'rgba(255,60,10,0)');
-    cx.fillStyle = g;
-    cx.fillRect(0, 0, w, h);
-
-    cx.strokeStyle = `rgba(255,106,31,${0.5 + a * 0.4})`;
-    cx.lineWidth = (2 + kick * 3) * dpr;
-    cx.beginPath(); cx.arc(cxp, cyp, R * (1 + kick * 0.04), 0, 6.2832); cx.stroke();
-
-    const fl = (performance.now() - flashT) / 260;
-    if (fl < 1) {
-      cx.strokeStyle = flashGood
-        ? `rgba(255,200,150,${(1 - fl) * 0.9})`
-        : `rgba(150,60,40,${(1 - fl) * 0.8})`;
-      cx.lineWidth = 3 * dpr;
-      cx.beginPath(); cx.arc(cxp, cyp, R + fl * 26 * dpr, 0, 6.2832); cx.stroke();
-    }
-
-    notes.forEach((n, i) => {
-      const dt = n.t - now;
-      if (dt > LEAD || n.hit) return;
-      const k = Math.max(0, dt / LEAD);
-      const r = R + k * (OUT - R);
-      const ang = (i * 1.7) % 6.2832;
-      const x = cxp + Math.cos(ang) * r, y = cyp + Math.sin(ang) * r;
-      cx.fillStyle = n.dead ? 'rgba(90,86,80,.5)' : `rgba(242,239,233,${0.35 + (1 - k) * 0.65})`;
-      cx.beginPath();
-      cx.arc(x, y, (3 + (1 - k) * 3.5) * dpr, 0, 6.2832);
-      cx.fill();
-    });
-
-    /* оценка последнего нажатия — крупно, в центре кольца */
-    const jt = (performance.now() - judgeT) / 700;
-    if (jt < 1 && judgeText) {
-      cx.font = `${11 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
-      cx.textAlign = 'center'; cx.textBaseline = 'middle';
-      cx.fillStyle = flashGood
-        ? `rgba(242,239,233,${(1 - jt) * 0.75})`
-        : `rgba(196,113,60,${(1 - jt) * 0.9})`;
-      cx.fillText(judgeText.toUpperCase(), cxp, cyp);
-    }
-
+    if (Glow.ready()) { Glow.resize(cv.width, cv.height); Glow.begin(); }
+    Lanes.draw();
+    if (Glow.ready()) { Glow.step(1 / 60); Glow.end(1.35); }
     raf = requestAnimationFrame(draw);
   }
 
@@ -603,32 +515,53 @@ const Dancer = (() => {
     clearInterval(tickTimer); cancelAnimationFrame(raf);
     Sound.onStep(null);
     if (kind === 'burn') {
-      if (Glow.ready()) Glow.burst(cv.width / 2, cv.height / 2, 80);
+      if (Glow.ready()) Glow.burst(cv.width / 2, cv.height * 0.8, 80);
       Sound.burn();
       setTimeout(() => Sound.stop(2.4), 900);
-      End.show('burn-dancer', null, best);
+      End.show('burn-dancer', null, Lanes.best());
     } else {
       Sound.stop(2.6);
-      End.show('out', null, best);
+      End.show('out', null, Lanes.best());
     }
   }
+
+  const KEY = { KeyA: 0, KeyS: 1, KeyD: 2, Digit1: 0, Digit2: 1, Digit3: 2 };
 
   return {
     init() {
       addEventListener('keydown', (e) => {
-        if (running && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); judge(); }
+        if (!running || e.repeat) return;
+        const l = KEY[e.code];
+        if (l !== undefined) { e.preventDefault(); Lanes.press(l); }
       });
-      /* Слушатель вешается один раз, а не при каждом заходе: иначе после
+      addEventListener('keyup', (e) => {
+        const l = KEY[e.code];
+        if (l !== undefined) Lanes.release(l);
+      });
+      /* Слушатели вешаются один раз, а не при каждом заходе: иначе после
          второй партии каждый тап считался бы дважды */
-      $('#floorwrap').addEventListener('pointerdown', (e) => {
-        if (running) { e.preventDefault(); judge(); }
+      const wrap = $('#floorwrap');
+      const lane = (e) => {
+        const r = wrap.getBoundingClientRect();
+        return Lanes.laneAt((e.clientX - r.left) / r.width);
+      };
+      wrap.addEventListener('pointerdown', (e) => {
+        if (!running) return;
+        e.preventDefault(); Lanes.press(lane(e));
       });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) =>
+        wrap.addEventListener(ev, (e) => { if (running) Lanes.release(lane(e)); }));
     },
     start() {
-      cv = $('#floor'); cx = cv.getContext('2d');
+      cv = $('#floor');
       cv.width = cv.clientWidth * DPR();
       cv.height = cv.clientHeight * DPR();
       Glow.init($('#floor-gl'));
+      Lanes.init(cv, {
+        labels: ['доум', 'тек', 'шейкер'],
+        onHit: (exact) => { res += exact ? GOOD : OKH; },
+        onMiss: () => { res += MISS; Sound.slip(); }
+      });
       reset();
       running = true;
       Sound.setTempo(PHASE[0].bpm);

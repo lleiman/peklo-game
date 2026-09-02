@@ -291,6 +291,10 @@ const Sound = (() => {
       cut.frequency.setTargetAtTime(3600 + heat * 6000, t, 0.4);
     },
     onStep(fn) { onStep = fn; },
+    /* Рисунок ударных наружу: дорожки ритм-игры берут ноты отсюда,
+       а не из отдельного чарта. То, что видно, — та же музыка,
+       что звучит, а не похожая на неё запись */
+    patterns: () => ({ doum: DOUM, tek: TEK }),
     now: () => (ctx ? ctx.currentTime : 0),
     stepLen: sixteenth,
 
