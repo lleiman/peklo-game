@@ -196,16 +196,19 @@ const Shaman = (() => {
       const base = (2.6 + k * 7) * dpr;
       const r = base * (1 + beat * (0.25 + k * 0.5));
 
-      /* свет под кожей: к порогу отклик наливается изнутри */
-      const g = hx.createRadialGradient(d.px, d.py, 0, d.px, d.py, r * 3.4);
-      g.addColorStop(0, `rgba(255,${170 - k * 90},${120 - k * 100},${(0.16 + k * 0.84) * vis})`);
-      g.addColorStop(0.4, `rgba(255,106,31,${(0.08 + k * 0.5) * vis})`);
-      g.addColorStop(1, 'rgba(255,106,31,0)');
-      hx.fillStyle = g;
-      hx.beginPath(); hx.arc(d.px, d.py, r * 3.4, 0, 6.2832); hx.fill();
-
-      hx.fillStyle = `rgba(${200 + k * 55},${170 - k * 60},${150 - k * 110},${(0.35 + k * 0.65) * vis})`;
-      hx.beginPath(); hx.arc(d.px, d.py, r, 0, 6.2832); hx.fill();
+      /* Свет под кожей уходит в слой WebGL: там он складывается и
+         размывается сам в себя. Без него остаётся 2D-запаска */
+      if (Glow.ready()) {
+        Glow.blob(d.px, d.py, r * 3.6, k * vis);
+      } else {
+        const g = hx.createRadialGradient(d.px, d.py, 0, d.px, d.py, r * 3.4);
+        g.addColorStop(0, `rgba(255,${170 - k * 90},${120 - k * 100},${(0.16 + k * 0.84) * vis})`);
+        g.addColorStop(1, 'rgba(255,106,31,0)');
+        hx.fillStyle = g;
+        hx.beginPath(); hx.arc(d.px, d.py, r * 3.4, 0, 6.2832); hx.fill();
+        hx.fillStyle = `rgba(${200 + k * 55},${170 - k * 60},${150 - k * 110},${(0.35 + k * 0.65) * vis})`;
+        hx.beginPath(); hx.arc(d.px, d.py, r, 0, 6.2832); hx.fill();
+      }
 
       /* тот, кого ведёшь, обведён тонким кольцом — «среди сотен именно её» */
       if (isTop && k > 0.12) {
@@ -219,7 +222,7 @@ const Shaman = (() => {
     if (burning) {
       const t = (performance.now() - burning.t0) / 1000;
       const d = burning.d;
-      if (t < 0.4) {
+      if (t < 0.4 && !Glow.ready()) {
         const a = 1 - t / 0.4;
         hx.fillStyle = `rgba(255,246,235,${a})`;
         hx.beginPath(); hx.arc(d.px, d.py, (10 + t * 190) * dpr, 0, 6.2832); hx.fill();
@@ -303,10 +306,15 @@ const Shaman = (() => {
     px_.beginPath(); px_.arc(f.x * w, f.y * h, 5 * dpr, 0, 6.2832); px_.fill();
   }
 
+  let lastT = 0;
   function draw() {
     if (!running && !burning) return;
     const now = performance.now() / 1000;
+    const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
+    lastT = now;
+    if (Glow.ready()) { Glow.resize(hall.width, hall.height); Glow.begin(); }
     drawHall(now);
+    if (Glow.ready()) { Glow.step(dt); Glow.end(1.5); }
     drawScope();
     if (variant === 'field' && pad) drawPad();
     /* трубки светятся своим звуком, а не своим значением */
@@ -324,6 +332,7 @@ const Shaman = (() => {
     const victim = d || dancers[0];
     if (kind === 'burn') {
       burning = { d: victim, t0: performance.now() };
+      if (Glow.ready()) Glow.burst(victim.px, victim.py, 70);
       Sound.burn();
       setTimeout(() => Sound.stop(2.4), 900);
       setTimeout(() => { cancelAnimationFrame(raf); burning = null;
@@ -400,6 +409,9 @@ const Shaman = (() => {
       scope = $('#scope'); sx_ = scope.getContext('2d');
       pad = $('#pad'); px_ = pad.getContext('2d');
       fit(hall); fit(scope); fit(pad);
+      /* слой свечения: если WebGL2 нет, игра идёт на 2D-запаске */
+      Glow.init($('#hall-gl'));
+      lastT = 0;
       reset();
       running = true; t0 = performance.now();
       Sound.setTempo(72);
@@ -522,6 +534,24 @@ const Dancer = (() => {
     /* пол дышит настоящим битом: уровень берётся с шины ударных */
     const kick = Sound.level('drum');
 
+    /* свет пола и метки уходят в слой WebGL */
+    if (Glow.ready()) {
+      Glow.resize(w, h);
+      Glow.begin();
+      Glow.blob(cxp, cyp, R * (2.6 + kick * 0.5), 0.12 + a * 0.75);
+      notes.forEach((n, i) => {
+        const dt2 = n.t - now;
+        if (dt2 > LEAD || n.hit) return;
+        const k = Math.max(0, dt2 / LEAD);
+        const rr = R + k * (OUT - R);
+        const ang = (i * 1.7) % 6.2832;
+        Glow.blob(cxp + Math.cos(ang) * rr, cyp + Math.sin(ang) * rr,
+                  (9 + (1 - k) * 12) * dpr, n.dead ? 0.05 : 0.25 + (1 - k) * 0.5);
+      });
+      Glow.step(1 / 60);
+      Glow.end(1.35);
+    }
+
     const g = cx.createRadialGradient(cxp, cyp, R * 0.2, cxp, cyp, OUT * 1.6);
     g.addColorStop(0, `rgba(255,60,10,${0.05 + a * 0.5 + kick * 0.1})`);
     g.addColorStop(1, 'rgba(255,60,10,0)');
@@ -573,6 +603,7 @@ const Dancer = (() => {
     clearInterval(tickTimer); cancelAnimationFrame(raf);
     Sound.onStep(null);
     if (kind === 'burn') {
+      if (Glow.ready()) Glow.burst(cv.width / 2, cv.height / 2, 80);
       Sound.burn();
       setTimeout(() => Sound.stop(2.4), 900);
       End.show('burn-dancer', null, best);
@@ -597,6 +628,7 @@ const Dancer = (() => {
       cv = $('#floor'); cx = cv.getContext('2d');
       cv.width = cv.clientWidth * DPR();
       cv.height = cv.clientHeight * DPR();
+      Glow.init($('#floor-gl'));
       reset();
       running = true;
       Sound.setTempo(PHASE[0].bpm);

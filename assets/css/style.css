@@ -88,7 +88,9 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
    Зал виден: библия описывает, как он чувствует одну среди сотен.
    Но это отклики, а не фигурки, и кликать по ним нельзя */
 .listen{flex:1;position:relative;min-height:210px}
-#hall{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* Два холста в одной коробке: снизу свет на WebGL, сверху 2D с линиями
+   и подписями. Порядок задан разметкой, поэтому z-index не нужен */
+#hall-gl,#hall{position:absolute;inset:0;width:100%;height:100%;display:block}
 .modes{position:absolute;left:0;bottom:0;display:flex;align-items:center;gap:10px}
 .modes .ml{font-family:var(--mono);font-size:9px;letter-spacing:.24em;
   text-transform:uppercase;color:var(--faint)}
@@ -134,9 +136,17 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
    Показывается только в варианте «вести». Трубки при нём остаются
    на экране как показания, но нажимать их уже нечего: положение
    в поле само задаёт, что звучит */
-.padwrap{display:none;position:relative;margin:0 auto;width:100%;max-width:420px}
+/* нижний отступ — под подпись, иначе она ложится на трубки */
+.padwrap{display:none;position:relative;margin:0 auto 22px;width:100%;max-width:420px}
 #shaman.v-field .padwrap{display:block}
-#shaman.v-field .tubes{pointer-events:none;opacity:.5}
+/* В режиме поля трубки — только показания: нажимать их нечего, и полная
+   высота им ни к чему. Иначе зал, спектр, поле, трубки и подпись
+   не помещаются на экран и подпись срезается */
+#shaman.v-field .tubes{pointer-events:none;opacity:.55}
+#shaman.v-field .tube{height:46px;padding-bottom:6px;justify-content:center}
+#shaman.v-field .tube .tk{display:none}
+#shaman.v-field .tube .tl{font-size:9px}
+#shaman.v-field .listen{min-height:150px}
 #shaman.v-field .teach{animation:none}
 #pad{width:100%;height:clamp(150px,26svh,230px);display:block;
   touch-action:none;cursor:crosshair}
@@ -157,7 +167,7 @@ h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,7vw,52px);
 
 /* ── Танцующий: пол ── */
 .floor{flex:1;position:relative;min-height:300px;touch-action:manipulation}
-#floor{width:100%;height:100%;display:block;position:absolute;inset:0}
+#floor-gl,#floor{width:100%;height:100%;display:block;position:absolute;inset:0}
 .phase{position:absolute;left:0;right:0;top:14px;text-align:center;
   font-family:var(--mono);font-size:10px;letter-spacing:.36em;
   text-transform:uppercase;color:var(--ink-hi);opacity:0}
