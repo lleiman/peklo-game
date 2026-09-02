@@ -91,7 +91,8 @@ const Arcade = (() => {
     start() {
       this.v = 0.3; this.gap = 0.5; this.t = 0; this.spins = 0;
       this.z = 0; this.curve = 0; this.tgt = 0; this.next = 3.2;
-      this.pal = 0; this.shake = 0;
+      this.pal = 0; this.shake = 0; this.look = 0;
+      Ash.init(130);
     },
     step() {
       this.t += 0.1;
@@ -99,6 +100,10 @@ const Arcade = (() => {
       this.v = Math.max(0.12, Math.min(1, this.v));
       this.z += this.v * 2.6;                 /* путь: он и крутит картинку */
       this.pal += 0.0016 + this.v * 0.0016;   /* кварталы перетекают светом */
+      /* Взгляд меняется своим темпом, не кратным палитре: так кислота
+         и тепловизор всё время попадают на разные кварталы */
+      this.look += 0.00105 + this.v * 0.00062;
+      Ash.step(0.1, -this.curve * 0.05);
 
       /* профиль дороги: цель кривизны меняется, руль идёт к ней плавно */
       this.next -= 0.1;
@@ -135,9 +140,13 @@ const Arcade = (() => {
       if (Road.ready()) {
         Road.draw(w, h, {
           z: this.z, curve: this.curve, speed: this.v,
-          pal: this.pal, car: Math.max(0, Math.min(1, this.gap)), shake: this.shake
+          pal: this.pal, car: Math.max(0, Math.min(1, this.gap)),
+          shake: this.shake, look: this.look
         });
       }
+      /* пепел летит поверх дороги: он серый и глушит свет, поэтому
+         на 2D-слое, а не в аддитивном свечении */
+      Ash.draw(cx, w, h);
       /* мотоцикл: тень у нижнего края, ведёт вбок на кривой */
       const bx = w / 2 - this.curve * w * 0.035;
       cx.fillStyle = 'rgba(8,8,8,.92)';

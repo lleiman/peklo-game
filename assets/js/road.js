@@ -29,6 +29,7 @@ const Road = (() => {
   uniform float uPal;      // квартал: перетекание палитры
   uniform float uCar;      // где впереди чужая машина, 0…1 по дальности
   uniform float uShake;    // тряска на срыве
+  uniform float uLook;     // как показан город: обычный, кислота, тепловизор, выжженный
 
   // палитры кварталов: нефть, неон, тоннель, рассвет
   vec3 pal(float t, int i){
@@ -43,6 +44,45 @@ const Road = (() => {
   }
 
   float hash(float n){ return fract(sin(n)*43758.5453); }
+  float luma(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+  // ── как город показан ──
+  // Свет меняется не оттенком, а способом видеть: кислота, тепловизор,
+  // выжженный. Считается в самом конце по светимости кадра
+  vec3 thermal(float l){
+    vec3 c = mix(vec3(0.00,0.00,0.07), vec3(0.10,0.00,0.48), smoothstep(0.00,0.22,l));
+    c = mix(c, vec3(0.72,0.04,0.48), smoothstep(0.22,0.42,l));
+    c = mix(c, vec3(1.00,0.22,0.05), smoothstep(0.42,0.62,l));
+    c = mix(c, vec3(1.00,0.84,0.14), smoothstep(0.62,0.82,l));
+    return mix(c, vec3(1.00,1.00,0.94), smoothstep(0.82,1.00,l));
+  }
+  vec3 acid(vec3 c){
+    float l = luma(c);
+    vec3 a = mix(vec3(0.02,0.09,0.03), vec3(0.42,1.00,0.10), smoothstep(0.04,0.50,l));
+    return mix(a, vec3(1.00,0.16,0.86), smoothstep(0.50,0.95,l));
+  }
+  vec3 burned(vec3 c){
+    // Сцена сама по себе тёмная, поэтому светимость сначала поднимаем:
+    // без этого рампа съедает почти весь кадр и «взгляд» превращается
+    // просто в темноту
+    float l = pow(clamp(luma(c) * 2.6, 0.0, 1.0), 0.55);
+    vec3 b = mix(vec3(0.03,0.02,0.02), vec3(0.85,0.30,0.06), smoothstep(0.04,0.42,l));
+    b = mix(b, vec3(1.00,0.80,0.45), smoothstep(0.42,0.78,l));
+    return b + vec3(1.0) * smoothstep(0.80, 1.0, l) * 0.55;
+  }
+  vec3 look(vec3 c, int i){
+    if (i == 1) return acid(c);
+    if (i == 2) return thermal(clamp(luma(c) * 1.35, 0.0, 1.0));
+    if (i == 3) return burned(c);
+    return c;
+  }
+  vec3 grade(vec3 c){
+    float f = fract(uLook);
+    int i = int(mod(uLook, 4.0));
+    int j = int(mod(uLook + 1.0, 4.0));
+    // держим один взгляд долго и перетекаем в следующий на последней четверти
+    return mix(look(c, i), look(c, j), smoothstep(0.78, 1.0, f));
+  }
 
   void main(){
     vec2 uv = vUV;
@@ -102,10 +142,11 @@ const Road = (() => {
     float v = length(uv) * uSpeed;
     col += palette(1.0) * v * v * 0.10;
 
-    // зерно, как на остальных экранах
-    col += (hash(uv.x*311.7 + uv.y*97.3 + uZ) - 0.5) * 0.035;
+    vec3 g = grade(col);
+    // зерно кладём после грейда: иначе тепловизор перекрасил бы и его
+    g += (hash(uv.x*311.7 + uv.y*97.3 + uZ) - 0.5) * 0.035;
 
-    outColor = vec4(max(col, 0.0), 1.0);
+    outColor = vec4(max(g, 0.0), 1.0);
   }`;
 
   function sh(t, s) {
@@ -134,7 +175,7 @@ const Road = (() => {
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
         -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1
       ]), gl.STATIC_DRAW);
-      ['uRes', 'uZ', 'uCurve', 'uSpeed', 'uPal', 'uCar', 'uShake']
+      ['uRes', 'uZ', 'uCurve', 'uSpeed', 'uPal', 'uCar', 'uShake', 'uLook']
         .forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
       return (ok = true);
     },
@@ -155,6 +196,7 @@ const Road = (() => {
       gl.uniform1f(U.uPal, s.pal);
       gl.uniform1f(U.uCar, s.car);
       gl.uniform1f(U.uShake, s.shake);
+      gl.uniform1f(U.uLook, s.look || 0);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
   };
