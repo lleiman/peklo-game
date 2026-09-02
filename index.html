@@ -7,7 +7,7 @@
 <meta name="description" content="ПЕКЛО — игра по роману «ТехноШаман». Семь ролей, у каждой своя механика.">
 <meta name="theme-color" content="#050505">
 <title>ПЕКЛО · игра</title>
-<link rel="stylesheet" href="assets/css/style.css?v=6">
+<link rel="stylesheet" href="assets/css/style.css?v=7">
 </head>
 <body>
 
@@ -58,7 +58,7 @@
       <button class="role" data-who="fresher">
         <span class="n">Фрешер</span>
         <span class="t">Гнать</span>
-        <span class="d">Молчаливый поединок и гонка по мокрым улицам. Всё решает одно: когда отпустить перед поворотом.</span>
+        <span class="d">Бесконечная трасса по мокрым улицам, свет кварталов перетекает на ходу. Всё решает одно: успеть сбросить до того, как дорога согнётся.</span>
         <span class="go">рвануть →</span>
       </button>
 
@@ -156,7 +156,7 @@
     <button class="quit" aria-label="Выйти">выйти</button>
   </header>
 
-  <div class="arena"><canvas id="arena"></canvas><div id="ar-count" class="combo"></div></div>
+  <div class="arena"><canvas id="arena-gl"></canvas><canvas id="arena"></canvas><div id="ar-count" class="combo"></div></div>
   <button id="ar-speak" class="speak">сказать слово</button>
   <p class="tip" id="ar-tip"></p>
 </section>
@@ -183,10 +183,11 @@
   </button>
 </div>
 
-<script src="assets/js/glow.js?v=6" defer></script>
-<script src="assets/js/lanes.js?v=6" defer></script>
-<script src="assets/js/sound.js?v=6" defer></script>
-<script src="assets/js/arcade.js?v=6" defer></script>
-<script src="assets/js/game.js?v=6" defer></script>
+<script src="assets/js/glow.js?v=7" defer></script>
+<script src="assets/js/road.js?v=7" defer></script>
+<script src="assets/js/lanes.js?v=7" defer></script>
+<script src="assets/js/sound.js?v=7" defer></script>
+<script src="assets/js/arcade.js?v=7" defer></script>
+<script src="assets/js/game.js?v=7" defer></script>
 </body>
 </html>

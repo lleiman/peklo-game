@@ -87,27 +87,39 @@ const Arcade = (() => {
      Решение: когда отпустить перед поворотом */
   const Fresher = {
     title: 'Фрешер', a: 'отрыв', b: 'скорость',
-    tip: 'Держи — разгон. Перед поворотом отпусти: войдёшь быстро — сорвёт. Не отстань от красной машины.',
+    tip: 'Держи — разгон. Дорога гнётся: входить в поворот на полном нельзя, сорвёт. Отпускай заранее и не отставай от красной машины.',
     start() {
-      this.v = 0.3; this.gap = 0.5; this.turns = []; this.t = 0; this.next = 2.2; this.spins = 0;
+      this.v = 0.3; this.gap = 0.5; this.t = 0; this.spins = 0;
+      this.z = 0; this.curve = 0; this.tgt = 0; this.next = 3.2;
+      this.pal = 0; this.shake = 0;
     },
     step() {
       this.t += 0.1;
       this.v += held ? 0.020 : -0.026;
       this.v = Math.max(0.12, Math.min(1, this.v));
-      /* повороты идут навстречу */
+      this.z += this.v * 2.6;                 /* путь: он и крутит картинку */
+      this.pal += 0.0016 + this.v * 0.0016;   /* кварталы перетекают светом */
+
+      /* профиль дороги: цель кривизны меняется, руль идёт к ней плавно */
       this.next -= 0.1;
-      if (this.next <= 0) { this.turns.push({ d: 1 }); this.next = 1.6 + Math.random() * 1.6; }
-      this.turns.forEach((tn) => { tn.d -= 0.1 * (0.35 + this.v * 0.6); });
-      this.turns = this.turns.filter((tn) => {
-        if (tn.d > 0) return true;
-        /* поворот пройден: важно, с какой скоростью в него вошли */
-        if (this.v > 0.62) { this.gap -= 0.26; this.v = 0.2; this.spins++; Sound.slip(); }
-        else { this.gap += 0.05; Sound.hit(true); }
-        return false;
-      });
-      /* Феррари идёт ровно; отстаёшь, если едешь медленно */
-      this.gap += (this.v - 0.55) * 0.011;
+      if (this.next <= 0) {
+        this.tgt = (Math.random() * 2 - 1) * 2.6;
+        this.next = 2.0 + Math.random() * 2.4;
+      }
+      this.curve += (this.tgt - this.curve) * 0.045;
+      this.shake = Math.max(0, this.shake - 0.06);
+
+      /* Вход в поворот на полном — срыв. Решение одно и то же каждые
+         несколько секунд: успеть сбросить до того, как дорога согнётся */
+      const bend = Math.abs(this.curve);
+      if (bend > 1.25 && this.v > 0.62) {
+        this.gap -= 0.22; this.v = 0.22; this.spins++;
+        this.shake = 1; Sound.slip();
+      } else if (bend > 1.25) {
+        this.gap += 0.012;                    /* прошёл чисто */
+      }
+
+      this.gap += (this.v - 0.55) * 0.010;
       this.gap = Math.min(1, this.gap);
       Sound.setTempo(72 + this.v * 46);
       Sound.setLayer('drum', 0.3 + this.v * 0.65);
@@ -119,27 +131,28 @@ const Arcade = (() => {
     },
     draw(w, h) {
       const dpr = D();
-      /* дорога: полосы бегут тем быстрее, чем выше скорость */
-      cx.strokeStyle = 'rgba(255,106,31,.16)';
-      cx.lineWidth = 2 * dpr;
-      for (let i = 0; i < 14; i++) {
-        const y = ((i / 14 + this.t * this.v * 0.5) % 1) * h;
-        cx.beginPath(); cx.moveTo(w / 2, y); cx.lineTo(w / 2, y + h * 0.035); cx.stroke();
+      /* дорога идёт шейдером на своём холсте, здесь только силуэт и метки */
+      if (Road.ready()) {
+        Road.draw(w, h, {
+          z: this.z, curve: this.curve, speed: this.v,
+          pal: this.pal, car: Math.max(0, Math.min(1, this.gap)), shake: this.shake
+        });
       }
-      /* повороты — дуги, приходящие сверху */
-      this.turns.forEach((tn) => {
-        const y = (1 - tn.d) * h * 0.86;
-        cx.strokeStyle = tn.d < 0.28 ? 'rgba(255,106,31,.95)' : 'rgba(196,113,60,.5)';
-        cx.lineWidth = 3 * dpr;
-        cx.beginPath(); cx.arc(w / 2, y, w * 0.2, 0.15, Math.PI - 0.15); cx.stroke();
-      });
-      /* красная машина впереди — тем дальше, чем меньше отрыв */
-      const fy = h * (0.12 + (1 - this.gap) * 0.5);
-      cx.fillStyle = `rgba(220,40,30,${0.35 + this.gap * 0.6})`;
-      cx.fillRect(w / 2 - 9 * dpr, fy, 18 * dpr, 26 * dpr);
-      /* ты */
+      /* мотоцикл: тень у нижнего края, ведёт вбок на кривой */
+      const bx = w / 2 - this.curve * w * 0.035;
+      cx.fillStyle = 'rgba(8,8,8,.92)';
+      cx.beginPath();
+      cx.ellipse(bx, h * 0.93, 26 * dpr, 9 * dpr, 0, 0, 6.2832);
+      cx.fill();
       cx.fillStyle = 'rgba(242,239,233,.9)';
-      cx.fillRect(w / 2 - 5 * dpr, h * 0.82, 10 * dpr, 20 * dpr);
+      cx.fillRect(bx - 4 * dpr, h * 0.86, 8 * dpr, 22 * dpr);
+      /* предупреждение о повороте */
+      if (Math.abs(this.curve) > 0.9) {
+        cx.font = `${11 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
+        cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        cx.fillStyle = this.v > 0.62 ? 'rgba(255,106,31,.95)' : 'rgba(140,134,126,.7)';
+        cx.fillText(this.curve > 0 ? 'ПОВОРОТ ВПРАВО' : 'ПОВОРОТ ВЛЕВО', w / 2, h * 0.12);
+      }
       Arcade.count(this.spins ? `срывов ${this.spins}` : 'ни одного срыва');
     }
   };
@@ -329,6 +342,10 @@ const Arcade = (() => {
       cur = GAMES[key];
       cv = document.querySelector('#arena'); cx = cv.getContext('2d');
       cv.width = cv.clientWidth * D(); cv.height = cv.clientHeight * D();
+      /* дорога живёт на своём холсте под этим: у неё свой контекст */
+      const rgl = document.querySelector('#arena-gl');
+      document.querySelector('#arcade').classList.toggle('has-road', key === 'fresher');
+      if (key === 'fresher') { rgl.width = cv.width; rgl.height = cv.height; Road.init(rgl); }
       document.querySelector('#ar-who').textContent = cur.title;
       document.querySelector('#ar-tip').textContent = cur.tip;
       document.querySelector('#arcade').classList.toggle('has-speak', key === 'photo');
