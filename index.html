@@ -7,7 +7,7 @@
 <meta name="description" content="ПЕКЛО — игра по роману «ТехноШаман». Семь ролей, у каждой своя механика.">
 <meta name="theme-color" content="#050505">
 <title>ПЕКЛО · игра</title>
-<link rel="stylesheet" href="assets/css/style.css?v=8">
+<link rel="stylesheet" href="assets/css/style.css?v=9">
 </head>
 <body>
 
@@ -98,7 +98,8 @@
   </header>
 
   <div class="listen">
-    <!-- слой свечения лежит под линиями: там свет, здесь чёткое -->
+    <!-- три слоя: помещение шейдером, свечение откликов, сверху 2D -->
+    <canvas id="hall-room"></canvas>
     <canvas id="hall-gl"></canvas>
     <canvas id="hall"></canvas>
     <div class="modes">
@@ -183,12 +184,13 @@
   </button>
 </div>
 
-<script src="assets/js/glow.js?v=8" defer></script>
-<script src="assets/js/road.js?v=8" defer></script>
-<script src="assets/js/ash.js?v=8" defer></script>
-<script src="assets/js/lanes.js?v=8" defer></script>
-<script src="assets/js/sound.js?v=8" defer></script>
-<script src="assets/js/arcade.js?v=8" defer></script>
-<script src="assets/js/game.js?v=8" defer></script>
+<script src="assets/js/glow.js?v=9" defer></script>
+<script src="assets/js/road.js?v=9" defer></script>
+<script src="assets/js/room.js?v=9" defer></script>
+<script src="assets/js/ash.js?v=9" defer></script>
+<script src="assets/js/lanes.js?v=9" defer></script>
+<script src="assets/js/sound.js?v=9" defer></script>
+<script src="assets/js/arcade.js?v=9" defer></script>
+<script src="assets/js/game.js?v=9" defer></script>
 </body>
 </html>

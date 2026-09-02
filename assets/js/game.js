@@ -50,6 +50,7 @@ const Shaman = (() => {
   let pad, px_, padOn = false;
   /* вариант «ритм»: уровни слоёв поднимаются попаданиями и оседают сами */
   let bl = [0, 0, 0], beatBar = 0;
+  let look = 0;   /* способ видеть: меняется по ходу партии */
 
   /* Константы поля подобраны прогоном пяти стратегий по 80 партий:
      стоять на месте — проигрыш, дёргаться — проигрыш, медленный обход —
@@ -344,8 +345,19 @@ const Shaman = (() => {
     const now = performance.now() / 1000;
     const dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
     lastT = now;
+    /* помещение рисуется первым и заполняет кадр целиком */
+    look += dt * 0.055;
+    if (Room.ready()) {
+      Room.draw(hall.width, hall.height, {
+        t: now, heat: hallMax().r, pulse: Sound.level('drum'),
+        look: look, shake: burning ? 0.5 : 0
+      });
+    }
     if (Glow.ready()) { Glow.resize(hall.width, hall.height); Glow.begin(); }
     drawHall(now);
+    /* пепел в воздухе зала: его тут и собирают */
+    Ash.step(dt, 0);
+    Ash.draw(hx, hall.width, hall.height);
     if (Glow.ready()) { Glow.step(dt); Glow.end(1.5); }
     drawScope();
     if (variant === 'field' && pad) drawPad();
@@ -480,8 +492,12 @@ const Shaman = (() => {
       scope = $('#scope'); sx_ = scope.getContext('2d');
       pad = $('#pad'); px_ = pad.getContext('2d');
       fit(hall); fit(scope); fit(pad);
-      /* слой свечения: если WebGL2 нет, игра идёт на 2D-запаске */
+      /* три слоя: помещение, свечение откликов, 2D поверх.
+         Если WebGL2 нет, остаётся только 2D — игра работает */
+      Room.init($('#hall-room'));
       Glow.init($('#hall-gl'));
+      Ash.init(90);
+      look = 0;
       lastT = 0;
       bl = [0, 0, 0]; beatBar = -1;
       if (variant === 'beat') {
