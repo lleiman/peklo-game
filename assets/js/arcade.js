@@ -32,6 +32,7 @@ const Arcade = (() => {
     title: 'Казе', a: 'глубина', b: 'тревога',
     tip: 'Держи — уходишь глубже. Отпустишь — всплываешь. Глубже образы идут быстрее, но и она ближе. Собери восемь и выйди живой.',
     start() { this.d = 0; this.fear = 0; this.img = 0; this.blips = []; this.t = 0; },
+    sceneA() { return this.d; }, sceneB() { return this.fear; },
     step() {
       this.t += 0.1;
       this.d += held ? 0.011 : -0.020;
@@ -173,6 +174,7 @@ const Arcade = (() => {
     title: 'Мадам', a: 'власть', b: 'сопротивление',
     tip: 'Веди голос по впадинам чужой волны. На гребне тебя выталкивает. Он сопротивляется и меняет частоту.',
     start() { this.p = 0; this.push = 0; this.y = 0.5; this.t = 0; this.f = 1.0; this.ph = 0; },
+    sceneA() { return this.p; }, sceneB() { return this.push; },
     step() {
       this.t += 0.1;
       this.ph += 0.1 * this.f;
@@ -223,6 +225,7 @@ const Arcade = (() => {
     title: 'Модель', a: 'восхищение', b: 'температура',
     tip: 'Держи — поднимаешь ставку: точнее, рискованнее, горячее. Признание не сдвинется. Оно и не может.',
     start() { this.adm = 0; this.temp = 0; this.stake = 0; this.t = 0; this.best = 0; },
+    sceneA() { return this.stake; }, sceneB() { return this.temp; },
     step() {
       this.t += 0.1;
       if (held) { this.stake += 0.016; this.temp += 0.0075; }
@@ -274,6 +277,7 @@ const Arcade = (() => {
     start() {
       this.film = 0; this.temp = 0.12; this.sil = 0; this.frags = []; this.t = 0; this.shots = 0; this.miss = 0;
     },
+    sceneA() { return this.film; }, sceneB() { return this.temp; },
     step() {
       this.t += 0.1;
       this.sil += 0.1;
@@ -316,6 +320,9 @@ const Arcade = (() => {
   };
 
   const GAMES = { kaze: Kaze, fresher: Fresher, madam: Madam, model: Model, photo: Photo };
+  /* какой сцене какой режим шейдера; у Фрешера своя дорога */
+  const SCENE = { kaze: 0, madam: 1, model: 2, photo: 3 };
+  let scLook = 0;
 
   const CARD = {
     'kaze-caught': ['глубина', 'Попалась', (n) => `Ты ушла глубже, чем нужно, и она открыла глаза. Река крови, кроваво-красные ворота, дыхание за ними.<br><br>Успела вынести ${n} образов из восьми. Шаман выдернул тебя наружу одним словом.`],
@@ -353,13 +360,17 @@ const Arcade = (() => {
       cv.width = cv.clientWidth * D(); cv.height = cv.clientHeight * D();
       /* дорога живёт на своём холсте под этим: у неё свой контекст */
       const rgl = document.querySelector('#arena-gl');
-      document.querySelector('#arcade').classList.toggle('has-road', key === 'fresher');
-      if (key === 'fresher') { rgl.width = cv.width; rgl.height = cv.height; Road.init(rgl); }
+      document.querySelector('#arcade').classList.toggle('has-road', true);
+      rgl.width = cv.width; rgl.height = cv.height;
+      scLook = 0;
+      if (key === 'fresher') Road.init(rgl);
+      else if (SCENE[key] !== undefined) { Scene.init(rgl); Scene.mode = SCENE[key]; }
       document.querySelector('#ar-who').textContent = cur.title;
       document.querySelector('#ar-tip').textContent = cur.tip;
       document.querySelector('#arcade').classList.toggle('has-speak', key === 'photo');
       labels(cur.a, cur.b);
       cur.start();
+      Ash.init(70);
       held = false; running = true;
       Sound.setLayer('drone', 0.4); Sound.setLayer('drum', 0.2); Sound.setLayer('choir', 0.1);
       Sound.setTempo(72); Sound.onStep(null); Sound.start();
@@ -367,6 +378,16 @@ const Arcade = (() => {
       const loop = () => {
         if (!running) return;
         cx.clearRect(0, 0, cv.width, cv.height);
+        /* сцена рисуется первой и заполняет кадр; поверх идёт 2D */
+        if (Scene.ready() && Scene.mode !== undefined && key !== 'fresher') {
+          scLook += 0.0016;
+          Scene.draw(cv.width, cv.height, {
+            t: performance.now() / 1000, mode: Scene.mode,
+            a: cur.sceneA ? cur.sceneA() : 0, b: cur.sceneB ? cur.sceneB() : 0,
+            look: scLook, pulse: Sound.level('drum')
+          });
+        }
+        if (key !== 'fresher') { Ash.step(1 / 60, 0); Ash.draw(cx, cv.width, cv.height); }
         cur.draw(cv.width, cv.height);
         raf = requestAnimationFrame(loop);
       };
