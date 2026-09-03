@@ -24,6 +24,75 @@ const Arcade = (() => {
     document.querySelector('#ar-lb').textContent = b;
   };
 
+
+  /* ═══ СЛОЙ ЧИТАЕМОСТИ ═══
+     Пять правил, ни одно из которых раньше не выполнялось:
+     орган управления виден на экране, а не описан в подписи;
+     цель перед глазами всё время; глагол показан до первого действия
+     и убирается после него; на каждое нажатие есть видимый отклик;
+     проигрыш объясняется. Текст мелким серым внизу — не обучение */
+  let acted = false;                 /* игрок хоть раз сделал то, что надо */
+  const mono = () => getComputedStyle(document.body).getPropertyValue('--mono');
+
+  const Guide = {
+    /* цель партии — всегда на виду, под панелью */
+    goal(w, h, text) {
+      const dpr = D();
+      cx.font = `${9.5 * dpr}px ${mono()}`;
+      cx.textAlign = 'center'; cx.textBaseline = 'top';
+      cx.fillStyle = 'rgba(196,113,60,.85)';
+      cx.fillText('ЦЕЛЬ · ' + text.toUpperCase(), w / 2, 10 * dpr);
+    },
+    /* кнопка удержания: видно, что жать, и видно, что жмёшь */
+    hold(w, h, on, label) {
+      const dpr = D(), r = 34 * dpr, cxp = w / 2, cyp = h - 58 * dpr;
+      const puls = acted ? 0 : 0.5 + 0.5 * Math.sin(performance.now() / 260);
+      cx.beginPath(); cx.arc(cxp, cyp, r + puls * 7 * dpr, 0, 6.2832);
+      cx.strokeStyle = on ? 'rgba(255,106,31,.95)'
+                          : `rgba(196,113,60,${0.45 + puls * 0.5})`;
+      cx.lineWidth = (on ? 3 : 1.6) * dpr; cx.stroke();
+      if (on) {
+        cx.fillStyle = 'rgba(255,106,31,.16)';
+        cx.beginPath(); cx.arc(cxp, cyp, r, 0, 6.2832); cx.fill();
+      }
+      cx.font = `${10 * dpr}px ${mono()}`;
+      cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillStyle = on ? 'rgba(255,106,31,1)' : 'rgba(200,196,189,.9)';
+      cx.fillText(on ? label[1] : label[0], cxp, cyp);
+      if (!acted) {
+        cx.font = `${10 * dpr}px ${mono()}`;
+        cx.fillStyle = `rgba(242,239,233,${0.5 + puls * 0.5})`;
+        cx.fillText('ЖМИ И ДЕРЖИ', cxp, cyp - r - 18 * dpr);
+      }
+    },
+    /* ручка, которую надо вести */
+    handle(w, h, x, y, label) {
+      const dpr = D();
+      const puls = acted ? 0 : 0.5 + 0.5 * Math.sin(performance.now() / 260);
+      cx.beginPath(); cx.arc(x, y, (11 + puls * 5) * dpr, 0, 6.2832);
+      cx.strokeStyle = 'rgba(255,106,31,.9)'; cx.lineWidth = 2 * dpr; cx.stroke();
+      cx.fillStyle = 'rgba(255,106,31,.85)';
+      cx.beginPath(); cx.arc(x, y, 4.5 * dpr, 0, 6.2832); cx.fill();
+      if (!acted) {
+        cx.font = `${10 * dpr}px ${mono()}`;
+        cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        cx.fillStyle = `rgba(242,239,233,${0.5 + puls * 0.5})`;
+        cx.fillText(label, w / 2, h - 30 * dpr);
+      }
+    },
+    /* подсказка нажатия: горит, когда нажимать пора */
+    tap(w, h, hot, label) {
+      const dpr = D();
+      const puls = 0.5 + 0.5 * Math.sin(performance.now() / 220);
+      cx.font = `${hot ? 13 : 10.5}px ${mono()}`;
+      cx.font = `${(hot ? 13 : 10.5) * dpr}px ${mono()}`;
+      cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillStyle = hot ? `rgba(255,106,31,${0.75 + puls * 0.25})`
+                         : 'rgba(140,134,126,.65)';
+      cx.fillText(label, w / 2, h - 34 * dpr);
+    }
+  };
+
   /* ═══ КАЗЕ · погружение ═══
      Три погружения в сознание Шамана: мир без изображений, плотный
      от звука. Глубже — больше видишь, но там тёмное присутствие.
@@ -79,7 +148,29 @@ const Arcade = (() => {
         g.addColorStop(1, 'rgba(150,20,30,0)');
         cx.fillStyle = g; cx.fillRect(0, 0, w, h);
       }
-      Arcade.count(`образов ${this.img} из 8`);
+      /* глубина столбиком слева: видно, где ты и где начинается опасное */
+      const bx = 22 * dpr, by = h * 0.18, bh = h * 0.46;
+      cx.fillStyle = 'rgba(255,255,255,.07)';
+      cx.fillRect(bx, by, 5 * dpr, bh);
+      cx.fillStyle = 'rgba(190,40,40,.32)';
+      cx.fillRect(bx, by + bh * 0.42, 5 * dpr, bh * 0.58);
+      cx.fillStyle = 'rgba(255,106,31,.95)';
+      cx.fillRect(bx - 4 * dpr, by + bh * this.d - dpr, 13 * dpr, 2.5 * dpr);
+      cx.font = `${8.5 * dpr}px ${mono()}`;
+      cx.textAlign = 'left'; cx.textBaseline = 'middle';
+      cx.fillStyle = 'rgba(150,60,50,.9)';
+      cx.fillText('ОНА', bx + 18 * dpr, by + bh * 0.72);
+      /* образы точками: сколько собрано и сколько осталось */
+      for (let i = 0; i < 8; i++) {
+        cx.beginPath();
+        cx.arc(w / 2 - 56 * dpr + i * 16 * dpr, h - 142 * dpr, 4 * dpr, 0, 6.2832);
+        cx.fillStyle = i < this.img ? 'rgba(242,239,233,.95)' : 'rgba(255,255,255,.13)';
+        cx.fill();
+      }
+      Guide.goal(w, h, 'собрать 8 образов и всплыть');
+      Guide.hold(w, h, held, ['ГЛУБЖЕ', 'ГЛУБЖЕ']);
+      Arcade.count(this.img >= 8 ? 'все собраны — отпусти и всплывай'
+                                 : `образов ${this.img} из 8`);
     }
   };
 
@@ -163,6 +254,8 @@ const Arcade = (() => {
         cx.fillStyle = this.v > 0.62 ? 'rgba(255,106,31,.95)' : 'rgba(140,134,126,.7)';
         cx.fillText(this.curve > 0 ? 'ПОВОРОТ ВПРАВО' : 'ПОВОРОТ ВЛЕВО', w / 2, h * 0.12);
       }
+      Guide.goal(w, h, 'не отстать 75 секунд');
+      Guide.hold(w, h, held, ['ГАЗ', 'ГАЗ']);
       Arcade.count(this.spins ? `срывов ${this.spins}` : 'ни одного срыва');
     }
   };
@@ -212,7 +305,9 @@ const Arcade = (() => {
       cx.beginPath(); cx.moveTo(0, ty); cx.lineTo(w, ty); cx.stroke();
       cx.fillStyle = ok ? 'rgba(255,106,31,1)' : 'rgba(140,134,126,.8)';
       cx.beginPath(); cx.arc(w / 2, ty, 6 * dpr, 0, 6.2832); cx.fill();
-      Arcade.count(ok ? 'просачивается' : 'выталкивает');
+      Guide.goal(w, h, 'заполнить власть, не дав вытолкнуть');
+      Guide.handle(w, h, w / 2, ty, 'ВЕДИ ПАЛЬЦЕМ ВВЕРХ И ВНИЗ');
+      Arcade.count(ok ? 'просачивается — держи тут' : 'выталкивает — ищи впадину');
     },
     move(x, y) { this.y = y; }
   };
@@ -264,6 +359,8 @@ const Arcade = (() => {
         cx.arc(w / 2 + Math.cos(a) * w * 0.44, h / 2 + Math.sin(a) * h * 0.42, 2.4 * dpr, 0, 6.2832);
         cx.fill();
       }
+      Guide.goal(w, h, 'поднять ставку выше — выиграть нельзя');
+      Guide.hold(w, h, held, ['ВЫШЕ', 'ВЫШЕ']);
       Arcade.count(`ставка ${Math.round(this.stake * 100)} · выше всего ${Math.round(this.best * 100)}`);
     }
   };
@@ -315,6 +412,9 @@ const Arcade = (() => {
         cx.ellipse(f.x * w, f.y * h, 13 * dpr, 5 * dpr, 0.4, 0, 6.2832);
         cx.fill();
       });
+      const inFrameNow = this.frags.some((f) => Math.abs(f.x - 0.5) < 0.055);
+      Guide.goal(w, h, 'снять как можно дороже, пока она не сгорела');
+      Guide.tap(w, h, inFrameNow, inFrameNow ? 'ЖМИ — В РАМКЕ' : 'ЖДИ, ПОКА ВОЙДЁТ В РАМКУ');
       Arcade.count(`кадров ${this.shots} · молчание ${this.sil.toFixed(0)} с`);
     }
   };
@@ -371,6 +471,7 @@ const Arcade = (() => {
       labels(cur.a, cur.b);
       cur.start();
       Ash.init(70);
+      acted = false;
       held = false; running = true;
       Sound.setLayer('drone', 0.4); Sound.setLayer('drum', 0.2); Sound.setLayer('choir', 0.1);
       Sound.setTempo(72); Sound.onStep(null); Sound.start();
@@ -402,7 +503,7 @@ const Arcade = (() => {
         py = (e.clientY - r.top) / r.height;
       };
       arena.addEventListener('pointerdown', (e) => {
-        e.preventDefault(); pos(e); held = true;
+        e.preventDefault(); pos(e); held = true; acted = true;
         if (cur && cur.move) cur.move(px, py);
         if (cur && cur.shoot) cur.shoot();
       });
@@ -414,7 +515,7 @@ const Arcade = (() => {
         arena.addEventListener(ev, () => { held = false; }));
       addEventListener('keydown', (e) => {
         if (!running) return;
-        if (e.code === 'Space') { e.preventDefault(); held = true; if (cur.shoot) cur.shoot(); }
+        if (e.code === 'Space') { e.preventDefault(); held = true; acted = true; if (cur.shoot) cur.shoot(); }
         if (e.code === 'ArrowUp' && cur.move) cur.move(0.5, Math.max(0, py -= 0.04));
         if (e.code === 'ArrowDown' && cur.move) cur.move(0.5, Math.min(1, py += 0.04));
       });
