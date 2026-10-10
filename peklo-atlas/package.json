@@ -1,0 +1,15 @@
+{
+  "name": "peklo-world-design-bible",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PEKLO World Design Bible interactive architectural atlas",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "fflate": "0.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
